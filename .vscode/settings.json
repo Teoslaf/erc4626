@@ -1,0 +1,4 @@
+{
+	"recon.foundryConfigPath": "recon/foundry.toml",
+	"recon.defaultFuzzer": "Echidna"
+}

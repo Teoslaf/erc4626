@@ -1,0 +1,2874 @@
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/ERC4626/ERC4626PropertyTests.sol
+  1 |     | // SPDX-License-Identifier: AGPL-3.0-or-later
+  2 |     | pragma solidity ^0.8.0;
+  3 |     | 
+  4 |     | import {TestERC20Token} from "./util/TestERC20Token.sol";
+  5 |     | import {CryticERC4626RedeemUsingApproval} from "./properties/RedeemUsingApprovalProps.sol";
+  6 |     | import {CryticERC4626SenderIndependent} from "./properties/SenderIndependentProps.sol";
+  7 |     | import {CryticERC4626PropertyBase} from "./util/ERC4626PropertyTestBase.sol";
+  8 |     | import {CryticERC4626MustNotRevert} from "./properties/MustNotRevertProps.sol";
+  9 |     | import {CryticERC4626FunctionalAccounting} from "./properties/FunctionalAccountingProps.sol";
+ 10 |     | import {CryticERC4626Rounding} from "./properties/RoundingProps.sol";
+ 11 |     | import {CryticERC4626VaultProxy} from "./properties/VaultProxy.sol";
+ 12 |     | import {CryticERC4626SecurityProps} from "./properties/SecurityProps.sol";
+ 13 |     | 
+ 14 |     | /// @notice Aggregator contract for various 4626 property tests. Inherit from this & echidna will test all properties at the same time.
+ 15 | *r  | contract CryticERC4626PropertyTests is
+ 16 |     |     CryticERC4626RedeemUsingApproval,
+ 17 |     |     CryticERC4626MustNotRevert,
+ 18 |     |     CryticERC4626SenderIndependent,
+ 19 |     |     CryticERC4626FunctionalAccounting,
+ 20 |     |     CryticERC4626Rounding,
+ 21 |     |     CryticERC4626SecurityProps
+ 22 |     | {
+ 23 |     | 
+ 24 |     | }
+ 25 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/ERC4626/properties/FunctionalAccountingProps.sol
+   1 |     | // SPDX-License-Identifier: AGPL-3.0-or-later
+   2 |     | pragma solidity ^0.8.0;
+   3 |     | 
+   4 |     | import {CryticERC4626PropertyBase} from "../util/ERC4626PropertyTestBase.sol";
+   5 |     | 
+   6 |     | contract CryticERC4626FunctionalAccounting is CryticERC4626PropertyBase {
+   7 |     |     /// @notice Validates the following properties:
+   8 |     |     ///  - deposit() must deduct assets from the owner
+   9 |     |     ///  - deposit() must credit shares to the receiver
+  10 |     |     ///  - deposit() must mint greater than or equal to the number of shares predicted by previewDeposit()
+  11 | *   |     function verify_depositProperties(
+  12 |     |         uint256 receiverId,
+  13 |     |         uint256 tokens
+  14 | *   |     ) public {
+  15 | *   |         address sender = address(this);
+  16 | *   |         address receiver = restrictAddressToThirdParties(receiverId);
+  17 | *   |         tokens = requireValidDepositAmount(sender, receiver, tokens);
+  18 |     | 
+  19 | *   |         (uint256 senderAssetsBeforeDeposit, ) = measureAddressHoldings(
+  20 | *   |             sender,
+  21 |     |             "sender",
+  22 |     |             "before deposit"
+  23 |     |         );
+  24 | *   |         (, uint256 receiverSharesBeforeDeposit) = measureAddressHoldings(
+  25 | *   |             receiver,
+  26 |     |             "receiver",
+  27 |     |             "before deposit"
+  28 |     |         );
+  29 |     | 
+  30 | *   |         uint256 sharesExpected = vault.previewDeposit(tokens);
+  31 | *r  |         uint256 sharesMinted = vault.deposit(tokens, receiver);
+  32 | *   |         assertGte(
+  33 | *   |             sharesMinted,
+  34 | *   |             sharesExpected,
+  35 |     |             "deposit() must always mint greater than or equal to the shares predicted by previewDeposit()"
+  36 |     |         );
+  37 |     | 
+  38 | *   |         (uint256 senderAssetsAfterDeposit, ) = measureAddressHoldings(
+  39 | *   |             sender,
+  40 |     |             "sender",
+  41 |     |             "after deposit"
+  42 |     |         );
+  43 | *   |         (, uint256 receiverSharesAfterDeposit) = measureAddressHoldings(
+  44 | *   |             receiver,
+  45 |     |             "receiver",
+  46 |     |             "after deposit"
+  47 |     |         );
+  48 |     | 
+  49 | *   |         uint256 senderAssetsDelta = senderAssetsBeforeDeposit -
+  50 | *   |             senderAssetsAfterDeposit;
+  51 | *   |         assertEq(
+  52 | *   |             senderAssetsDelta,
+  53 | *   |             tokens,
+  54 |     |             "deposit() must consume exactly the number of tokens requested"
+  55 |     |         );
+  56 |     | 
+  57 | *   |         uint256 receiverSharesDelta = receiverSharesAfterDeposit -
+  58 | *   |             receiverSharesBeforeDeposit;
+  59 | *   |         assertEq(
+  60 | *   |             receiverSharesDelta,
+  61 | *   |             sharesMinted,
+  62 |     |             "deposit() must credit the correct number of shares to the receiver"
+  63 |     |         );
+  64 |     |     }
+  65 |     | 
+  66 |     |     /// @notice Validates the following properties:
+  67 |     |     ///  - mint() must deduct assets from the owner
+  68 |     |     ///  - mint() must credit shares to the receiver
+  69 |     |     ///  - mint() must consume less than or equal to the number of assets predicted by previewMint()
+  70 | *   |     function verify_mintProperties(uint256 receiverId, uint256 shares) public {
+  71 | *   |         address sender = address(this);
+  72 | *   |         address receiver = restrictAddressToThirdParties(receiverId);
+  73 | *r  |         uint256 tokensExpected = vault.previewMint(shares);
+  74 | *   |         shares = requireValidMintAmount(sender, receiver, shares);
+  75 |     | 
+  76 | *   |         (uint256 senderAssetsBeforeMint, ) = measureAddressHoldings(
+  77 | *   |             sender,
+  78 |     |             "sender",
+  79 |     |             "before mint"
+  80 |     |         );
+  81 | *   |         (, uint256 receiverSharesBeforeMint) = measureAddressHoldings(
+  82 | *   |             receiver,
+  83 |     |             "receiver",
+  84 |     |             "before mint"
+  85 |     |         );
+  86 |     | 
+  87 | *r  |         uint256 tokensConsumed = vault.mint(shares, receiver);
+  88 | *   |         assertLte(
+  89 | *   |             tokensConsumed,
+  90 | *   |             tokensExpected,
+  91 |     |             "mint() must always consume less than or equal to the tokens predicted by previewMint()"
+  92 |     |         );
+  93 |     | 
+  94 | *   |         (uint256 senderAssetsAfterMint, ) = measureAddressHoldings(
+  95 | *   |             sender,
+  96 |     |             "sender",
+  97 |     |             "after mint"
+  98 |     |         );
+  99 | *   |         (, uint256 receiverSharesAfterMint) = measureAddressHoldings(
+ 100 | *   |             receiver,
+ 101 |     |             "receiver",
+ 102 |     |             "after mint"
+ 103 |     |         );
+ 104 |     | 
+ 105 | *   |         uint256 senderAssetsDelta = senderAssetsBeforeMint -
+ 106 | *   |             senderAssetsAfterMint;
+ 107 | *   |         assertEq(
+ 108 | *   |             senderAssetsDelta,
+ 109 | *   |             tokensConsumed,
+ 110 |     |             "mint() must consume exactly the number of tokens requested"
+ 111 |     |         );
+ 112 |     | 
+ 113 | *   |         uint256 receiverSharesDelta = receiverSharesAfterMint -
+ 114 | *   |             receiverSharesBeforeMint;
+ 115 | *   |         assertEq(
+ 116 | *   |             receiverSharesDelta,
+ 117 | *   |             shares,
+ 118 |     |             "mint() must credit the correct number of shares to the receiver"
+ 119 |     |         );
+ 120 |     |     }
+ 121 |     | 
+ 122 |     |     /// @notice Validates the following properties:
+ 123 |     |     ///  - redeem() must deduct shares from the owner
+ 124 |     |     ///  - redeem() must credit assets to the receiver
+ 125 |     |     ///  - redeem() must credit greater than or equal to the number of assets predicted by previewRedeem()
+ 126 | *   |     function verify_redeemProperties(
+ 127 |     |         uint256 receiverId,
+ 128 |     |         uint256 shares
+ 129 | *   |     ) public {
+ 130 |     |         // we can only redeem on behalf of address(this) until we get cheatcodes
+ 131 | *   |         address owner = address(this);
+ 132 | *   |         address receiver = restrictAddressToThirdParties(receiverId);
+ 133 | *   |         shares = requireValidRedeemAmount(owner, shares);
+ 134 |     | 
+ 135 | *   |         (, uint256 ownerSharesBefore) = measureAddressHoldings(
+ 136 | *   |             owner,
+ 137 |     |             "owner",
+ 138 |     |             "before redeem"
+ 139 |     |         );
+ 140 | *   |         (uint256 receiverAssetsBefore, ) = measureAddressHoldings(
+ 141 | *   |             receiver,
+ 142 |     |             "receiver",
+ 143 |     |             "before redeem"
+ 144 |     |         );
+ 145 |     | 
+ 146 | *   |         uint256 tokensExpected = vault.previewRedeem(shares);
+ 147 | *   |         uint256 tokensWithdrawn = vault.redeem(shares, receiver, owner);
+ 148 | *   |         assertGte(
+ 149 | *   |             tokensWithdrawn,
+ 150 | *   |             tokensExpected,
+ 151 |     |             "redeem() must withdraw greater than or equal to the number of assets predicted by previewRedeem()"
+ 152 |     |         );
+ 153 |     | 
+ 154 | *   |         (, uint256 ownerSharesAfter) = measureAddressHoldings(
+ 155 | *   |             owner,
+ 156 |     |             "owner",
+ 157 |     |             "after redeem"
+ 158 |     |         );
+ 159 | *   |         (uint256 receiverAssetsAfter, ) = measureAddressHoldings(
+ 160 | *   |             receiver,
+ 161 |     |             "receiver",
+ 162 |     |             "after redeem"
+ 163 |     |         );
+ 164 |     | 
+ 165 | *   |         uint256 receiverAssetsDelta = receiverAssetsAfter -
+ 166 | *   |             receiverAssetsBefore;
+ 167 | *   |         assertEq(
+ 168 | *   |             receiverAssetsDelta,
+ 169 | *   |             tokensWithdrawn,
+ 170 |     |             "redeem() must credit the correct number of assets to the receiver"
+ 171 |     |         );
+ 172 |     | 
+ 173 | *   |         uint256 ownerSharesDelta = ownerSharesBefore - ownerSharesAfter;
+ 174 | *   |         assertEq(
+ 175 | *   |             ownerSharesDelta,
+ 176 | *   |             shares,
+ 177 |     |             "redeem() must deduct the correct number of shares from the owner"
+ 178 |     |         );
+ 179 |     |     }
+ 180 |     | 
+ 181 |     |     /// @notice Validates the following properties:
+ 182 |     |     ///  - withdraw() must deduct shares from the owner
+ 183 |     |     ///  - withdraw() must credit assets to the receiver
+ 184 |     |     ///  - withdraw() must deduct less than or equal to the number of shares predicted by previewWithdraw()
+ 185 | *   |     function verify_withdrawProperties(
+ 186 |     |         uint256 receiverId,
+ 187 |     |         uint256 tokens
+ 188 | *   |     ) public {
+ 189 |     |         // we can only withdraw on behalf of address(this) until we get cheatcodes
+ 190 | *   |         address owner = address(this);
+ 191 | *   |         address receiver = restrictAddressToThirdParties(receiverId);
+ 192 | *   |         tokens = requireValidWithdrawAmount(owner, tokens);
+ 193 | *   |         uint256 sharesExpected = vault.previewWithdraw(tokens);
+ 194 |     | 
+ 195 | *   |         (, uint256 ownerSharesBefore) = measureAddressHoldings(
+ 196 | *   |             owner,
+ 197 |     |             "owner",
+ 198 |     |             "before withdraw"
+ 199 |     |         );
+ 200 | *   |         (uint256 receiverAssetsBefore, ) = measureAddressHoldings(
+ 201 | *   |             receiver,
+ 202 |     |             "receiver",
+ 203 |     |             "before withdraw"
+ 204 |     |         );
+ 205 |     | 
+ 206 | *   |         uint256 sharesRedeemed = vault.withdraw(tokens, receiver, owner);
+ 207 | *   |         assertLte(
+ 208 | *   |             sharesRedeemed,
+ 209 | *   |             sharesExpected,
+ 210 |     |             "withdraw() must redeem less than or equal to the number of shares predicted by previewWithdraw()"
+ 211 |     |         );
+ 212 |     | 
+ 213 | *   |         (, uint256 ownerSharesAfter) = measureAddressHoldings(
+ 214 | *   |             owner,
+ 215 |     |             "owner",
+ 216 |     |             "after withdraw"
+ 217 |     |         );
+ 218 | *   |         (uint256 receiverAssetsAfter, ) = measureAddressHoldings(
+ 219 | *   |             receiver,
+ 220 |     |             "receiver",
+ 221 |     |             "after withdraw"
+ 222 |     |         );
+ 223 |     | 
+ 224 | *   |         uint256 receiverAssetsDelta = receiverAssetsAfter -
+ 225 | *   |             receiverAssetsBefore;
+ 226 | *   |         assertEq(
+ 227 | *   |             receiverAssetsDelta,
+ 228 | *   |             tokens,
+ 229 |     |             "withdraw() must credit the correct number of assets to the receiver"
+ 230 |     |         );
+ 231 |     | 
+ 232 | *   |         uint256 ownerSharesDelta = ownerSharesBefore - ownerSharesAfter;
+ 233 | *   |         assertEq(
+ 234 | *   |             ownerSharesDelta,
+ 235 | *   |             sharesRedeemed,
+ 236 |     |             "withdraw() must deduct the correct number of shares from the owner"
+ 237 |     |         );
+ 238 |     |     }
+ 239 |     | }
+ 240 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/ERC4626/properties/MustNotRevertProps.sol
+   1 |     | // SPDX-License-Identifier: AGPL-3.0-or-later
+   2 |     | pragma solidity ^0.8.0;
+   3 |     | 
+   4 |     | import {CryticERC4626PropertyBase} from "../util/ERC4626PropertyTestBase.sol";
+   5 |     | import {CryticERC4626VaultProxy} from "./VaultProxy.sol";
+   6 |     | 
+   7 |     | contract CryticERC4626MustNotRevert is
+   8 |     |     CryticERC4626PropertyBase,
+   9 |     |     CryticERC4626VaultProxy
+  10 |     | {
+  11 |     |     /// @notice Validates the following properties:
+  12 |     |     /// - vault.asset() must not revert
+  13 | *   |     function verify_assetMustNotRevert() public {
+  14 | *   |         try vault.asset() {
+  15 | *   |             return;
+  16 |     |         } catch {
+  17 |     |             assertWithMsg(false, "vault.asset() must not revert");
+  18 |     |         }
+  19 |     |     }
+  20 |     | 
+  21 |     |     /// @notice Validates the following properties:
+  22 |     |     /// - vault.totalAssets() must not revert
+  23 | *   |     function verify_totalAssetsMustNotRevert() public {
+  24 | *   |         try vault.totalAssets() {
+  25 | *   |             return;
+  26 |     |         } catch {
+  27 |     |             assertWithMsg(false, "vault.totalAssets() must not revert");
+  28 |     |         }
+  29 |     |     }
+  30 |     | 
+  31 |     |     /// @notice Validates the following properties:
+  32 |     |     /// - vault.convertToAssets() must not revert for reasonable values
+  33 | *   |     function verify_convertToAssetsMustNotRevert(uint256 shares) public {
+  34 |     |         // arbitrarily define "reasonable values" to be 10**(token.decimals+20)
+  35 | *   |         uint256 reasonably_largest_value = 10 ** (vault.decimals() + 20);
+  36 |     | 
+  37 |     |         // prevent scenarios where there is enough totalSupply to trigger overflows
+  38 | *r  |         require(vault.totalSupply() <= reasonably_largest_value);
+  39 | *   |         shares = clampLte(shares, reasonably_largest_value);
+  40 |     | 
+  41 |     |         // exclude the possibility of idiosyncratic reverts. Might have to add more in future.
+  42 | *   |         shares = clampLte(shares, vault.totalSupply());
+  43 |     | 
+  44 | *   |         emit LogUint256("totalSupply", vault.totalSupply());
+  45 | *   |         emit LogUint256("totalAssets", vault.totalAssets());
+  46 |     | 
+  47 | *   |         try vault.convertToAssets(shares) {
+  48 | *   |             return;
+  49 |     |         } catch {
+  50 | *   |             assertWithMsg(false, "vault.convertToAssets() must not revert");
+  51 |     |         }
+  52 |     |     }
+  53 |     | 
+  54 |     |     /// @notice Validates the following properties:
+  55 |     |     /// - vault.convertToShares() must not revert for reasonable values
+  56 | *   |     function verify_convertToSharesMustNotRevert(uint256 tokens) public {
+  57 |     |         // arbitrarily define "reasonable values" to be 10**(token.decimals+20)
+  58 | *   |         uint256 reasonably_largest_value = 10 ** (asset.decimals() + 20);
+  59 |     | 
+  60 |     |         // prevent scenarios where there is enough totalSupply to trigger overflows
+  61 | *r  |         require(asset.totalSupply() <= reasonably_largest_value);
+  62 |     | 
+  63 |     |         // exclude the possibility of idiosyncratic reverts. Might have to add more in future.
+  64 | *   |         tokens = clampLte(tokens, asset.totalSupply());
+  65 |     | 
+  66 | *   |         try vault.convertToShares(tokens) {
+  67 | *   |             return;
+  68 |     |         } catch {
+  69 | *   |             assertWithMsg(false, "vault.convertToShares() must not revert");
+  70 |     |         }
+  71 |     |     }
+  72 |     | 
+  73 | *   |     function verify_maxDepositMustNotRevert(address owner) public {
+  74 | *   |         try vault.maxDeposit(owner) {
+  75 | *   |             return;
+  76 |     |         } catch {
+  77 |     |             assertWithMsg(false, "vault.maxDeposit() must not revert");
+  78 |     |         }
+  79 |     |     }
+  80 |     | 
+  81 | *   |     function verify_maxMintMustNotRevert(address owner) public {
+  82 | *   |         try vault.maxMint(owner) {
+  83 | *   |             return;
+  84 |     |         } catch {
+  85 |     |             assertWithMsg(false, "vault.maxMint() must not revert");
+  86 |     |         }
+  87 |     |     }
+  88 |     | 
+  89 | *   |     function verify_maxRedeemMustNotRevert(address owner) public {
+  90 |     |         // if the following reverts from overflow, bail out.
+  91 |     |         // additional criterion might be required in the future
+  92 | *r  |         vault.convertToAssets(vault.balanceOf(owner));
+  93 |     | 
+  94 | *   |         try vault.maxRedeem(owner) {
+  95 | *   |             return;
+  96 |     |         } catch {
+  97 |     |             assertWithMsg(false, "vault.maxRedeem() must not revert");
+  98 |     |         }
+  99 |     |     }
+ 100 |     | 
+ 101 | *   |     function verify_maxWithdrawMustNotRevert(address owner) public {
+ 102 |     |         // if the following reverts from overflow, bail out.
+ 103 |     |         // additional criterion might be required in the future
+ 104 | *r  |         vault.convertToAssets(vault.balanceOf(owner));
+ 105 |     | 
+ 106 | *   |         try vault.maxWithdraw(owner) {
+ 107 | *   |             return;
+ 108 |     |         } catch {
+ 109 |     |             assertWithMsg(false, "vault.maxWithdraw() must not revert");
+ 110 |     |         }
+ 111 |     |     }
+ 112 |     | }
+ 113 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/ERC4626/properties/RedeemUsingApprovalProps.sol
+   1 |     | // SPDX-License-Identifier: AGPL-3.0-or-later
+   2 |     | pragma solidity ^0.8.0;
+   3 |     | import {CryticERC4626PropertyBase} from "../util/ERC4626PropertyTestBase.sol";
+   4 |     | import {CryticERC4626VaultProxy} from "./VaultProxy.sol";
+   5 |     | 
+   6 |     | contract CryticERC4626RedeemUsingApproval is
+   7 |     |     CryticERC4626PropertyBase,
+   8 |     |     CryticERC4626VaultProxy
+   9 |     | {
+  10 |     |     /// @notice verifies `redeem()` must allow proxies to redeem shares on behalf of the owner using share token approvals
+  11 |     |     ///         verifies third party `redeem()` calls must update the msg.sender's allowance
+  12 | *   |     function verify_redeemViaApprovalProxy(
+  13 |     |         uint256 receiverId,
+  14 |     |         uint256 shares
+  15 | *   |     ) public returns (uint256 tokensWithdrawn) {
+  16 | *   |         address owner = address(this);
+  17 | *   |         address receiver = restrictAddressToThirdParties(receiverId);
+  18 | *   |         shares = requireValidRedeemAmount(owner, shares);
+  19 |     | 
+  20 | *   |         vault.approve(address(redemptionProxy), shares);
+  21 | *   |         measureAddressHoldings(address(this), "vault", "before redeemption");
+  22 |     | 
+  23 | *   |         try redemptionProxy.redeemOnBehalf(shares, receiver, owner) returns (
+  24 |     |             uint256 _tokensWithdrawn
+  25 |     |         ) {
+  26 | *   |             tokensWithdrawn = _tokensWithdrawn;
+  27 |     |         } catch {
+  28 |     |             assertWithMsg(
+  29 |     |                 false,
+  30 |     |                 "vault.redeem() reverted during redeem via approval"
+  31 |     |             );
+  32 |     |         }
+  33 |     | 
+  34 |     |         // verify allowance is updated
+  35 | *   |         uint256 newAllowance = vault.allowance(owner, address(redemptionProxy));
+  36 | *   |         assertEq(
+  37 | *   |             newAllowance,
+  38 | *   |             0,
+  39 |     |             "The vault failed to update the redemption proxy's share allowance"
+  40 |     |         );
+  41 |     |     }
+  42 |     | 
+  43 |     |     /// @notice verifies `withdraw()` must allow proxies to withdraw shares on behalf of the owner using share token approvals
+  44 |     |     ///         verifies third party `withdraw()` calls must update the msg.sender's allowance
+  45 | *   |     function verify_withdrawViaApprovalProxy(
+  46 |     |         uint256 receiverId,
+  47 |     |         uint256 tokens
+  48 | *   |     ) public returns (uint256 sharesBurned) {
+  49 | *   |         address owner = address(this);
+  50 | *   |         address receiver = restrictAddressToThirdParties(receiverId);
+  51 | *   |         tokens = requireValidWithdrawAmount(owner, tokens);
+  52 |     | 
+  53 | *   |         uint256 expectedSharesConsumed = vault.previewWithdraw(tokens);
+  54 | *   |         vault.approve(address(redemptionProxy), expectedSharesConsumed);
+  55 | *   |         measureAddressHoldings(address(this), "vault", "before withdraw");
+  56 |     | 
+  57 | *   |         try redemptionProxy.withdrawOnBehalf(tokens, receiver, owner) returns (
+  58 |     |             uint256 _sharesBurned
+  59 |     |         ) {
+  60 | *   |             sharesBurned = _sharesBurned;
+  61 |     |         } catch {
+  62 |     |             assertWithMsg(
+  63 |     |                 false,
+  64 |     |                 "vault.withdraw() reverted during withdraw via approval"
+  65 |     |             );
+  66 |     |         }
+  67 |     | 
+  68 | *   |         emit LogUint256("withdraw consumed this many shares:", sharesBurned);
+  69 |     | 
+  70 |     |         // verify allowance is updated
+  71 | *   |         uint256 newAllowance = vault.allowance(owner, address(redemptionProxy));
+  72 | *   |         uint256 expectedAllowance = expectedSharesConsumed - sharesBurned;
+  73 | *   |         emit LogUint256("Expecting allowance to now be:", expectedAllowance);
+  74 | *   |         assertEq(
+  75 | *   |             expectedAllowance,
+  76 | *   |             newAllowance,
+  77 |     |             "The vault failed to update the redemption proxy's share allowance"
+  78 |     |         );
+  79 |     |     }
+  80 |     | 
+  81 |     |     /// @notice verifies third parties must not be able to `withdraw()` tokens on an owner's behalf without a token approval
+  82 | *   |     function verify_withdrawRequiresTokenApproval(
+  83 |     |         uint256 receiverId,
+  84 |     |         uint256 tokens,
+  85 |     |         uint256 sharesApproved
+  86 | *   |     ) public {
+  87 | *   |         address owner = address(this);
+  88 | *   |         address receiver = restrictAddressToThirdParties(receiverId);
+  89 | *   |         tokens = requireValidWithdrawAmount(owner, tokens);
+  90 | *   |         uint256 expectedSharesConsumed = vault.previewWithdraw(tokens);
+  91 | *   |         emit LogUint256(
+  92 |     |             "Will attempt to proxy withdraw this many shares:",
+  93 | *   |             expectedSharesConsumed
+  94 |     |         );
+  95 |     | 
+  96 | *r  |         require(sharesApproved < expectedSharesConsumed);
+  97 | *   |         emit LogUint256("Approving spend of this many shares:", sharesApproved);
+  98 | *   |         vault.approve(address(redemptionProxy), sharesApproved);
+  99 |     | 
+ 100 | *   |         try redemptionProxy.withdrawOnBehalf(tokens, receiver, owner) returns (
+ 101 |     |             uint256 _sharesBurned
+ 102 |     |         ) {
+ 103 |     |             assertLte(
+ 104 |     |                 _sharesBurned,
+ 105 |     |                 sharesApproved,
+ 106 |     |                 "Redemption proxy must not be able to withdraw more shares than it was approved"
+ 107 |     |             );
+ 108 |     |         } catch {}
+ 109 |     |     }
+ 110 |     | 
+ 111 |     |     /// @notice verifies third parties must not be able to `redeem()` shares on an owner's behalf without a token approval
+ 112 | *   |     function verify_redeemRequiresTokenApproval(
+ 113 |     |         uint256 receiverId,
+ 114 |     |         uint256 shares,
+ 115 |     |         uint256 sharesApproved
+ 116 | *   |     ) public {
+ 117 | *   |         address owner = address(this);
+ 118 | *   |         address receiver = restrictAddressToThirdParties(receiverId);
+ 119 | *   |         shares = requireValidRedeemAmount(owner, shares);
+ 120 | *   |         emit LogUint256(
+ 121 |     |             "Will attempt to proxy redeem this many shares:",
+ 122 | *   |             shares
+ 123 |     |         );
+ 124 |     | 
+ 125 | *r  |         require(sharesApproved < shares);
+ 126 | *   |         emit LogUint256("Approving spend of this many shares:", sharesApproved);
+ 127 | *   |         vault.approve(address(redemptionProxy), sharesApproved);
+ 128 |     | 
+ 129 | *   |         try redemptionProxy.redeemOnBehalf(shares, receiver, owner) returns (
+ 130 |     |             uint256 _sharesBurned
+ 131 |     |         ) {
+ 132 |     |             assertLte(
+ 133 |     |                 _sharesBurned,
+ 134 |     |                 sharesApproved,
+ 135 |     |                 "Redemption proxy must not be able to redeem more shares than it was approved"
+ 136 |     |             );
+ 137 |     |         } catch {}
+ 138 |     |     }
+ 139 |     | }
+ 140 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/ERC4626/properties/RoundingProps.sol
+   1 |     | // SPDX-License-Identifier: AGPL-3.0-or-later
+   2 |     | pragma solidity ^0.8.0;
+   3 |     | import {CryticERC4626PropertyBase} from "../util/ERC4626PropertyTestBase.sol";
+   4 |     | import {CryticERC4626VaultProxy} from "./VaultProxy.sol";
+   5 |     | 
+   6 |     | contract CryticERC4626Rounding is
+   7 |     |     CryticERC4626PropertyBase,
+   8 |     |     CryticERC4626VaultProxy
+   9 |     | {
+  10 |     |     /// @notice verifies shares may never be minted for free using previewDeposit()
+  11 | *   |     function verify_previewDepositRoundingDirection() public {
+  12 | *   |         require(supportsInternalTestingIface);
+  13 | *   |         uint256 sharesMinted = vault.previewDeposit(0);
+  14 | *   |         assertEq(
+  15 | *   |             sharesMinted,
+  16 | *   |             0,
+  17 |     |             "previewDeposit() must not mint shares at no cost"
+  18 |     |         );
+  19 |     |     }
+  20 |     | 
+  21 |     |     /// @notice verifies shares may never be minted for free using previewMint()
+  22 | *   |     function verify_previewMintRoundingDirection(uint256 shares) public {
+  23 | *   |         require(supportsInternalTestingIface);
+  24 | *r  |         require(shares > 0);
+  25 | *r  |         uint256 tokensConsumed = vault.previewMint(shares);
+  26 | *   |         assertGt(
+  27 | *   |             tokensConsumed,
+  28 | *   |             0,
+  29 |     |             "previewMint() must never mint shares at no cost"
+  30 |     |         );
+  31 |     |     }
+  32 |     | 
+  33 |     |     /// @notice verifies shares may never be minted for free using convertToShares()
+  34 | *   |     function verify_convertToSharesRoundingDirection() public {
+  35 | *   |         require(supportsInternalTestingIface);
+  36 |     |         // note: the correctness of this property can't be tested using solmate as a reference impl. 0/n=0. best case scenario, some other property gets set off.
+  37 | *   |         uint256 tokensWithdrawn = vault.convertToShares(0);
+  38 | *   |         assertEq(
+  39 | *   |             tokensWithdrawn,
+  40 | *   |             0,
+  41 |     |             "convertToShares() must not allow shares to be minted at no cost"
+  42 |     |         );
+  43 |     |     }
+  44 |     | 
+  45 |     |     /// @notice verifies tokens may never be withdrawn for free using previewRedeem()
+  46 | *   |     function verify_previewRedeemRoundingDirection() public {
+  47 | *   |         require(supportsInternalTestingIface);
+  48 | *   |         uint256 tokensWithdrawn = vault.previewRedeem(0);
+  49 | *   |         assertEq(
+  50 | *   |             tokensWithdrawn,
+  51 | *   |             0,
+  52 |     |             "previewRedeem() must not allow assets to be withdrawn at no cost"
+  53 |     |         );
+  54 |     |     }
+  55 |     | 
+  56 |     |     /// @notice verifies tokens may never be withdrawn for free using previewWithdraw()
+  57 | *   |     function verify_previewWithdrawRoundingDirection(uint256 tokens) public {
+  58 | *   |         require(supportsInternalTestingIface);
+  59 | *r  |         require(tokens > 0);
+  60 | *r  |         uint256 sharesRedeemed = vault.previewWithdraw(tokens);
+  61 | *   |         assertGt(
+  62 | *   |             sharesRedeemed,
+  63 | *   |             0,
+  64 |     |             "previewWithdraw() must not allow assets to be withdrawn at no cost"
+  65 |     |         );
+  66 |     |     }
+  67 |     | 
+  68 |     |     /// @notice verifies tokens may never be withdrawn for free using convertToAssets()
+  69 | *   |     function verify_convertToAssetsRoundingDirection() public {
+  70 | *   |         require(supportsInternalTestingIface);
+  71 |     |         // note: the correctness of this property can't be tested using solmate as a reference impl. 0/n=0. best case scenario, some other property gets set off.
+  72 | *   |         uint256 tokensWithdrawn = vault.convertToAssets(0);
+  73 | *   |         assertEq(
+  74 | *   |             tokensWithdrawn,
+  75 | *   |             0,
+  76 |     |             "convertToAssets() must not allow assets to be withdrawn at no cost"
+  77 |     |         );
+  78 |     |     }
+  79 |     | 
+  80 |     |     /// @notice Indirectly verifies the rounding direction of convertToShares/convertToAssets is correct by attempting to
+  81 |     |     ///         create an arbitrage by depositing, then withdrawing
+  82 | *   |     function verify_convertRoundTrip(uint256 amount) public {
+  83 | *   |         require(supportsInternalTestingIface);
+  84 | *r  |         uint256 sharesMinted = vault.convertToShares(amount);
+  85 | *   |         uint256 tokensWithdrawn = vault.convertToAssets(sharesMinted);
+  86 | *   |         assertGte(
+  87 | *   |             amount,
+  88 | *   |             tokensWithdrawn,
+  89 |     |             "A profit was extractable from a convertTo round trip (deposit, then withdraw)"
+  90 |     |         );
+  91 |     |     }
+  92 |     | 
+  93 |     |     /// @notice Indirectly verifies the rounding direction of convertToShares/convertToAssets is correct by attempting to
+  94 |     |     ///         create an arbitrage by withdrawing, then depositing
+  95 | *   |     function verify_convertRoundTrip2(uint256 amount) public {
+  96 | *   |         require(supportsInternalTestingIface);
+  97 | *r  |         uint256 tokensWithdrawn = vault.convertToAssets(amount);
+  98 | *   |         uint256 sharesMinted = vault.convertToShares(tokensWithdrawn);
+  99 | *   |         assertGte(
+ 100 | *   |             amount,
+ 101 | *   |             sharesMinted,
+ 102 |     |             "A profit was extractable from a convertTo round trip (withdraw, then deposit)"
+ 103 |     |         );
+ 104 |     |     }
+ 105 |     | 
+ 106 |     |     /// @notice verifies Shares may never be minted for free using deposit()
+ 107 | *   |     function verify_depositRoundingDirection() public {
+ 108 | *   |         require(supportsInternalTestingIface);
+ 109 | *r  |         uint256 shares = vault.deposit(0, address(this));
+ 110 |     |         assertEq(shares, 0, "Shares must not be minted for free");
+ 111 |     |     }
+ 112 |     | 
+ 113 |     |     /// @notice verifies Shares may never be minted for free using mint()
+ 114 | *   |     function verify_mintRoundingDirection(uint256 shares) public {
+ 115 | *   |         require(supportsInternalTestingIface);
+ 116 | *r  |         require(shares > 0);
+ 117 | *r  |         uint256 tokensDeposited = vault.mint(shares, address(this));
+ 118 |     | 
+ 119 | *   |         assertGt(tokensDeposited, 0, "Shares must not be minted for free");
+ 120 |     |     }
+ 121 |     | 
+ 122 |     |     /// @notice verifies tokens may never be withdrawn for free using withdraw()
+ 123 | *   |     function verify_withdrawRoundingDirection(uint256 tokens) public {
+ 124 | *   |         require(supportsInternalTestingIface);
+ 125 | *r  |         require(tokens > 0);
+ 126 | *r  |         uint256 sharesRedeemed = vault.withdraw(
+ 127 | *   |             tokens,
+ 128 | *   |             address(this),
+ 129 | *   |             address(this)
+ 130 |     |         );
+ 131 |     | 
+ 132 | *   |         assertGt(sharesRedeemed, 0, "Token must not be withdrawn for free");
+ 133 |     |     }
+ 134 |     | 
+ 135 |     |     /// @notice verifies tokens may never be withdrawn for free using redeem()
+ 136 | *   |     function verify_redeemRoundingDirection() public {
+ 137 | *   |         require(supportsInternalTestingIface);
+ 138 | *r  |         uint256 tokensWithdrawn = vault.redeem(0, address(this), address(this));
+ 139 |     |         assertEq(tokensWithdrawn, 0, "Tokens must not be withdrawn for free");
+ 140 |     |     }
+ 141 |     | }
+ 142 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/ERC4626/properties/SecurityProps.sol
+  1 |     | // SPDX-License-Identifier: AGPL-3.0-or-later
+  2 |     | pragma solidity ^0.8.0;
+  3 |     | import {CryticERC4626PropertyBase} from "../util/ERC4626PropertyTestBase.sol";
+  4 |     | 
+  5 |     | contract CryticERC4626SecurityProps is CryticERC4626PropertyBase {
+  6 |     |     /// @notice verify `decimals()` should be larger than or equal to `asset.decimals()`
+  7 | *   |     function verify_assetDecimalsLessThanVault() public {
+  8 | *   |         assertGte(
+  9 | *   |             vault.decimals(),
+ 10 | *   |             asset.decimals(),
+ 11 |     |             "The vault's share token should have greater than or equal to the number of decimals as the vault's asset token."
+ 12 |     |         );
+ 13 |     |     }
+ 14 |     | 
+ 15 |     |     /// @notice verify Accounting system must not be vulnerable to share price inflation attacks
+ 16 | *   |     function verify_sharePriceInflationAttack(
+ 17 |     |         uint256 inflateAmount,
+ 18 |     |         uint256 delta
+ 19 | *   |     ) public {
+ 20 |     |         // this has to be changed if there's deposit/withdraw fees
+ 21 | *   |         uint256 lossThreshold = 0.999 ether;
+ 22 |     |         // vault is fresh
+ 23 | *r  |         require(vault.totalAssets() == 0);
+ 24 | *   |         require(vault.totalSupply() == 0);
+ 25 |     | 
+ 26 |     |         // these minimums are to prevent 1-wei rounding errors from triggering the property
+ 27 | *r  |         require(inflateAmount > 10000);
+ 28 | *   |         uint256 victimDeposit = inflateAmount + delta;
+ 29 | *   |         address attacker = address(this);
+ 30 |     |         // fund account
+ 31 | *   |         prepareAddressForDeposit(attacker, inflateAmount);
+ 32 |     | 
+ 33 | *   |         uint256 shares = vault.deposit(1, attacker);
+ 34 |     |         // attack only works when pps=1:1 + new vault
+ 35 | *   |         require(shares == 1);
+ 36 | *   |         require(vault.totalAssets() == 1);
+ 37 |     | 
+ 38 |     |         // inflate pps
+ 39 | *   |         asset.transfer(address(vault), inflateAmount - 1);
+ 40 |     | 
+ 41 |     |         // fund victim
+ 42 | *r  |         alice.fund(victimDeposit);
+ 43 | *   |         alice.approveFunds();
+ 44 |     | 
+ 45 | *   |         emit LogUint256("Amount of alice's deposit:", victimDeposit);
+ 46 | *   |         uint256 aliceShares = alice.depositFunds(victimDeposit);
+ 47 | *   |         emit LogUint256("Alice Shares:", aliceShares);
+ 48 | *r  |         uint256 aliceWithdrawnFunds = alice.redeemShares(aliceShares);
+ 49 | *   |         emit LogUint256(
+ 50 |     |             "Amount of tokens alice withdrew:",
+ 51 | *   |             aliceWithdrawnFunds
+ 52 |     |         );
+ 53 |     | 
+ 54 | *   |         uint256 victimLoss = victimDeposit - aliceWithdrawnFunds;
+ 55 | *   |         emit LogUint256("Alice Loss:", victimLoss);
+ 56 |     | 
+ 57 | *   |         uint256 minRedeemedAmountNorm = (victimDeposit * lossThreshold) /
+ 58 | *   |             1 ether;
+ 59 |     | 
+ 60 | *   |         emit LogUint256("lossThreshold", lossThreshold);
+ 61 | *   |         emit LogUint256("minRedeemedAmountNorm", minRedeemedAmountNorm);
+ 62 | *   |         assertGt(
+ 63 | *   |             aliceWithdrawnFunds,
+ 64 | *   |             minRedeemedAmountNorm,
+ 65 |     |             "Share inflation attack possible, victim lost an amount over lossThreshold%"
+ 66 |     |         );
+ 67 |     |     }
+ 68 |     | }
+ 69 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/ERC4626/properties/SenderIndependentProps.sol
+   1 |     | // SPDX-License-Identifier: AGPL-3.0-or-later
+   2 |     | pragma solidity ^0.8.0;
+   3 |     | import {CryticERC4626PropertyBase} from "../util/ERC4626PropertyTestBase.sol";
+   4 |     | 
+   5 |     | contract CryticERC4626SenderIndependent is CryticERC4626PropertyBase {
+   6 |     |     // todo: these properties may have issues in vaults that have super weird redemption curves.
+   7 |     |     // If that happens, use a proxy contract to compare results instead of msg.sender's state
+   8 |     | 
+   9 |     |     /// @notice verify `maxDeposit()` assumes the receiver/sender has infinite assets
+  10 | *   |     function verify_maxDepositIgnoresSenderAssets(uint256 tokens) public {
+  11 | *   |         address receiver = address(this);
+  12 | *   |         uint256 maxDepositBefore = vault.maxDeposit(receiver);
+  13 | *r  |         asset.mint(receiver, tokens);
+  14 | *   |         uint256 maxDepositAfter = vault.maxDeposit(receiver);
+  15 | *   |         assertEq(
+  16 | *   |             maxDepositBefore,
+  17 | *   |             maxDepositAfter,
+  18 |     |             "maxDeposit must assume the agent has infinite assets"
+  19 |     |         );
+  20 |     |     }
+  21 |     | 
+  22 |     |     /// @notice verify `maxMint()` assumes the receiver/sender has infinite assets
+  23 | *   |     function verify_maxMintIgnoresSenderAssets(uint256 tokens) public {
+  24 | *   |         address receiver = address(this);
+  25 | *   |         uint256 maxMintBefore = vault.maxMint(receiver);
+  26 | *r  |         asset.mint(receiver, tokens);
+  27 | *   |         uint256 maxMintAfter = vault.maxMint(receiver);
+  28 | *   |         assertEq(
+  29 | *   |             maxMintBefore,
+  30 | *   |             maxMintAfter,
+  31 |     |             "maxMint must assume the agent has infinite assets"
+  32 |     |         );
+  33 |     |     }
+  34 |     | 
+  35 |     |     /// @notice verify `previewMint()` does not account for msg.sender asset balance
+  36 | *   |     function verify_previewMintIgnoresSender(
+  37 |     |         uint256 tokens,
+  38 |     |         uint256 shares
+  39 | *   |     ) public {
+  40 | *   |         address receiver = address(this);
+  41 | *r  |         uint256 assetsExpectedBefore = vault.previewMint(shares);
+  42 | *   |         prepareAddressForDeposit(receiver, tokens);
+  43 |     | 
+  44 | *   |         uint256 assetsExpectedAfter = vault.previewMint(shares);
+  45 | *   |         assertEq(
+  46 | *   |             assetsExpectedBefore,
+  47 | *   |             assetsExpectedAfter,
+  48 |     |             "previewMint must not be dependent on msg.sender"
+  49 |     |         );
+  50 |     |     }
+  51 |     | 
+  52 |     |     /// @notice verify `previewDeposit()` does not account for msg.sender asset balance
+  53 | *   |     function verify_previewDepositIgnoresSender(uint256 tokens) public {
+  54 | *   |         address receiver = address(this);
+  55 | *r  |         uint256 sharesExpectedBefore = vault.previewDeposit(tokens);
+  56 | *   |         prepareAddressForDeposit(receiver, tokens);
+  57 |     | 
+  58 | *   |         uint256 sharesExpectedAfter = vault.previewDeposit(tokens);
+  59 | *   |         assertEq(
+  60 | *   |             sharesExpectedBefore,
+  61 | *   |             sharesExpectedAfter,
+  62 |     |             "previewDeposit must not be dependent on msg.sender"
+  63 |     |         );
+  64 |     |     }
+  65 |     | 
+  66 |     |     /// @notice verify `previewWithdraw()` does not account for msg.sender asset balance
+  67 | *   |     function verify_previewWithdrawIgnoresSender(uint256 tokens) public {
+  68 | *   |         address receiver = address(this);
+  69 | *r  |         uint256 sharesExpectedBefore = vault.previewWithdraw(tokens);
+  70 | *   |         prepareAddressForDeposit(receiver, tokens);
+  71 |     | 
+  72 | *r  |         vault.deposit(tokens, receiver);
+  73 |     | 
+  74 | *r  |         uint256 sharesExpectedAfter = vault.previewWithdraw(tokens);
+  75 | *   |         assertEq(
+  76 | *   |             sharesExpectedBefore,
+  77 | *   |             sharesExpectedAfter,
+  78 |     |             "previewWithdraw must not be dependent on msg.sender"
+  79 |     |         );
+  80 |     | 
+  81 |     |         // keep this property relatively stateless
+  82 | *r  |         vault.redeem(vault.balanceOf(receiver), receiver, receiver);
+  83 |     |     }
+  84 |     | 
+  85 |     |     /// @notice verify `previewRedeem()` does not account for msg.sender asset balance
+  86 | *   |     function verify_previewRedeemIgnoresSender(uint256 shares) public {
+  87 | *   |         address receiver = address(this);
+  88 | *r  |         uint256 tokensExpectedBefore = vault.previewRedeem(shares);
+  89 |     | 
+  90 | *   |         uint256 assetsToDeposit = vault.previewMint(shares);
+  91 | *   |         prepareAddressForDeposit(receiver, assetsToDeposit);
+  92 |     | 
+  93 | *r  |         vault.deposit(assetsToDeposit, receiver);
+  94 |     | 
+  95 | *r  |         uint256 tokensExpectedAfter = vault.previewRedeem(shares);
+  96 | *   |         assertEq(
+  97 | *   |             tokensExpectedBefore,
+  98 | *   |             tokensExpectedAfter,
+  99 |     |             "previewRedeem must not be dependent on msg.sender"
+ 100 |     |         );
+ 101 |     | 
+ 102 |     |         // keep this property relatively stateless
+ 103 | *r  |         vault.redeem(vault.balanceOf(receiver), receiver, receiver);
+ 104 |     |     }
+ 105 |     | }
+ 106 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/ERC4626/properties/VaultProxy.sol
+  1 |     | // SPDX-License-Identifier: AGPL-3.0-or-later
+  2 |     | pragma solidity ^0.8.0;
+  3 |     | import {CryticERC4626PropertyBase} from "../util/ERC4626PropertyTestBase.sol";
+  4 |     | import {CryticIERC4626Internal} from "../util/IERC4626Internal.sol";
+  5 |     | 
+  6 |     | contract CryticERC4626VaultProxy is CryticERC4626PropertyBase {
+  7 | *   |     function recognizeProfitProxy(uint256 profit) public {
+  8 | *   |         require(supportsInternalTestingIface);
+  9 | *r  |         require(vault.totalSupply() > 0);
+ 10 | *r  |         CryticIERC4626Internal(address(vault)).recognizeProfit(profit);
+ 11 |     |     }
+ 12 |     | 
+ 13 | *   |     function recognizeLossProxy(uint256 loss) public {
+ 14 | *   |         require(supportsInternalTestingIface);
+ 15 | *r  |         require(vault.totalSupply() > 0);
+ 16 | *r  |         CryticIERC4626Internal(address(vault)).recognizeLoss(loss);
+ 17 |     |     }
+ 18 |     | 
+ 19 |     |     /// @dev intended to be used when property violations are being shrunk
+ 20 | *   |     function depositForSelfSimple(uint256 assets) public {
+ 21 | *r  |         asset.mint(address(this), assets);
+ 22 | *   |         asset.approve(address(vault), assets);
+ 23 | *r  |         vault.deposit(assets, address(this));
+ 24 |     |     }
+ 25 |     | 
+ 26 | *   |     function redeemForSelfSimple(uint256 shares) public {
+ 27 | *   |         shares = clampLte(shares, vault.balanceOf(address(this)));
+ 28 | *r  |         vault.redeem(shares, address(this), address(this));
+ 29 |     |     }
+ 30 |     | 
+ 31 |     |     // consider removing/refactoring the following since they're so unlikely to be useful during testing
+ 32 | *   |     function deposit(uint256 assets, uint256 receiverId) public {
+ 33 | *   |         address receiver = restrictAddressToThirdParties(receiverId);
+ 34 | *r  |         vault.deposit(assets, receiver);
+ 35 |     |     }
+ 36 |     | 
+ 37 | *   |     function withdraw(
+ 38 |     |         uint256 assets,
+ 39 |     |         uint256 ownerId,
+ 40 |     |         uint256 receiverId
+ 41 | *   |     ) public {
+ 42 | *   |         address receiver = restrictAddressToThirdParties(receiverId);
+ 43 | *   |         address owner = restrictAddressToThirdParties(ownerId);
+ 44 | *r  |         vault.withdraw(assets, receiver, owner);
+ 45 |     |     }
+ 46 |     | 
+ 47 | *   |     function mint(uint256 shares, uint256 receiverId) public {
+ 48 | *   |         address receiver = restrictAddressToThirdParties(receiverId);
+ 49 | *r  |         vault.mint(shares, receiver);
+ 50 |     |     }
+ 51 |     | 
+ 52 | *   |     function redeem(
+ 53 |     |         uint256 shares,
+ 54 |     |         uint256 ownerId,
+ 55 |     |         uint256 receiverId
+ 56 | *   |     ) public {
+ 57 | *   |         address receiver = restrictAddressToThirdParties(receiverId);
+ 58 | *   |         address owner = restrictAddressToThirdParties(ownerId);
+ 59 | *r  |         vault.redeem(shares, receiver, owner);
+ 60 |     |     }
+ 61 |     | 
+ 62 | *   |     function mintAsset(uint256 assets, uint256 receiverId) public {
+ 63 | *   |         address receiver = restrictAddressToThirdParties(receiverId);
+ 64 | *r  |         asset.mint(receiver, assets);
+ 65 |     |     }
+ 66 |     | }
+ 67 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/ERC4626/util/Actor.sol
+   1 |     | // SPDX-License-Identifier: AGPL-3.0-or-later
+   2 |     | pragma solidity ^0.8.0;
+   3 |     | 
+   4 |     | import {IERC4626} from "../../util/IERC4626.sol";
+   5 |     | import {TestERC20Token} from "../util/TestERC20Token.sol";
+   6 |     | import {PropertiesAsserts} from "../../util/PropertiesHelper.sol";
+   7 |     | 
+   8 |     | /// @notice This contract has two purposes:
+   9 |     | ///  1. Act as a proxy for performing vault deposits/withdraws (since we don't have vm.prank)
+  10 |     | ///  2. Keep track of how much the account has deposited/withdrawn & raise an error if the account can withdraw/redeem more than it deposited/minted.
+  11 |     | /// @dev It's important that other property tests never send tokens/shares to the Actor contract address, or else the accounting will break. This restriction is enforced in restrictAddressToThirdParties()
+  12 |     | ///      If support is added for "harvesting" a vault during property tests, the accounting logic here needs to be updated to reflect cases where an actor can withdraw more than they deposited.
+  13 | *   | contract Actor is PropertiesAsserts {
+  14 |     |     TestERC20Token token;
+  15 |     |     IERC4626 vault;
+  16 |     | 
+  17 |     |     uint256 tokensDeposited; //tracks how many aggregate tokens this actor has deposited on its own behalf
+  18 |     |     uint256 sharesMinted; //tracks how many aggregate shares this actor has minted on its own behalf
+  19 |     | 
+  20 | *   |     constructor(IERC4626 _vault) {
+  21 | *   |         vault = _vault;
+  22 | *   |         token = TestERC20Token(address(_vault.asset()));
+  23 |     |     }
+  24 |     | 
+  25 | *   |     function accountForOpenedPosition(
+  26 |     |         uint256 _tokensDeposited,
+  27 |     |         uint256 _sharesMinted
+  28 |     |     ) internal {
+  29 | *   |         tokensDeposited += _tokensDeposited;
+  30 | *   |         sharesMinted += _sharesMinted;
+  31 |     |     }
+  32 |     | 
+  33 | *   |     function accountForClosedPosition(
+  34 |     |         uint256 _tokensReceived,
+  35 |     |         uint256 _sharesBurned
+  36 |     |     ) internal {
+  37 | *   |         assertLte(
+  38 | *   |             _sharesBurned,
+  39 | *   |             sharesMinted,
+  40 |     |             "Actor has burned more shares than they ever minted. Implies a rounding or accounting error"
+  41 |     |         );
+  42 | *   |         assertLte(
+  43 | *   |             _tokensReceived,
+  44 | *   |             tokensDeposited,
+  45 |     |             "Actor has withdrawn more tokens than they ever deposited. Implies a rounding or accounting error"
+  46 |     |         );
+  47 | *   |         tokensDeposited -= _tokensReceived;
+  48 | *   |         sharesMinted -= _sharesBurned;
+  49 |     |     }
+  50 |     | 
+  51 | *   |     function fund(uint256 amount) public {
+  52 | *   |         token.mint(address(this), amount);
+  53 |     |     }
+  54 |     | 
+  55 | *   |     function approveFunds() public {
+  56 | *   |         token.approve(address(vault), type(uint256).max);
+  57 |     |     }
+  58 |     | 
+  59 | *   |     function depositFunds(
+  60 |     |         uint256 assets
+  61 | *   |     ) public returns (uint256 _sharesMinted) {
+  62 | *   |         _sharesMinted = vault.deposit(assets, address(this));
+  63 | *   |         accountForOpenedPosition(assets, _sharesMinted);
+  64 |     |     }
+  65 |     | 
+  66 |     |     function mintShares(
+  67 |     |         uint256 shares
+  68 |     |     ) public returns (uint256 _tokensDeposited) {
+  69 |     |         _tokensDeposited = vault.mint(shares, address(this));
+  70 |     |         accountForOpenedPosition(_tokensDeposited, shares);
+  71 |     |     }
+  72 |     | 
+  73 |     |     function withdrawTokens(
+  74 |     |         uint256 assets
+  75 |     |     ) public returns (uint256 _sharesBurned) {
+  76 |     |         _sharesBurned = vault.withdraw(assets, address(this), address(this));
+  77 |     |         accountForClosedPosition(assets, _sharesBurned);
+  78 |     |     }
+  79 |     | 
+  80 | *   |     function redeemShares(
+  81 |     |         uint256 shares
+  82 | *   |     ) public returns (uint256 _tokensWithdrawn) {
+  83 | *   |         _tokensWithdrawn = vault.redeem(shares, address(this), address(this));
+  84 | *   |         accountForClosedPosition(_tokensWithdrawn, shares);
+  85 |     |     }
+  86 |     | 
+  87 |     |     function depositFundsOnBehalf(
+  88 |     |         uint256 assets,
+  89 |     |         address receiver
+  90 |     |     ) public returns (uint256 _sharesMinted) {
+  91 |     |         _sharesMinted = vault.deposit(assets, receiver);
+  92 |     |     }
+  93 |     | 
+  94 |     |     function mintSharesOnBehalf(
+  95 |     |         uint256 shares,
+  96 |     |         address receiver
+  97 |     |     ) public returns (uint256 _tokensDeposited) {
+  98 |     |         _tokensDeposited = vault.mint(shares, receiver);
+  99 |     |     }
+ 100 |     | 
+ 101 |     |     function withdrawTokensOnBehalf(
+ 102 |     |         uint256 assets,
+ 103 |     |         address receiver
+ 104 |     |     ) public returns (uint256 _sharesBurned) {
+ 105 |     |         _sharesBurned = vault.withdraw(assets, receiver, address(this));
+ 106 |     |         accountForClosedPosition(assets, _sharesBurned);
+ 107 |     |     }
+ 108 |     | 
+ 109 |     |     function redeemSharesOnBehalf(
+ 110 |     |         uint256 shares,
+ 111 |     |         address receiver
+ 112 |     |     ) public returns (uint256 _tokensWithdrawn) {
+ 113 |     |         _tokensWithdrawn = vault.redeem(shares, receiver, address(this));
+ 114 |     |         accountForClosedPosition(_tokensWithdrawn, shares);
+ 115 |     |     }
+ 116 |     | }
+ 117 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/ERC4626/util/ERC4626PropertyTestBase.sol
+   1 |     | // SPDX-License-Identifier: AGPL-3.0-or-later
+   2 |     | pragma solidity ^0.8.0;
+   3 |     | 
+   4 |     | import {IERC20} from "../../util/IERC20.sol";
+   5 |     | import {IERC4626} from "../../util/IERC4626.sol";
+   6 |     | import {TestERC20Token} from "./TestERC20Token.sol";
+   7 |     | import {Actor} from "../util/Actor.sol";
+   8 |     | import {PropertiesAsserts} from "../../util/PropertiesHelper.sol";
+   9 |     | import {RedemptionProxy} from "./RedemptionProxy.sol";
+  10 |     | 
+  11 |     | /// @notice This contract is used as a base contract for all 4626 property tests.
+  12 |     | contract CryticERC4626PropertyBase is PropertiesAsserts {
+  13 |     |     TestERC20Token asset;
+  14 |     |     IERC4626 vault;
+  15 |     | 
+  16 |     |     Actor alice;
+  17 |     |     Actor bob; //remove?
+  18 |     | 
+  19 |     |     RedemptionProxy redemptionProxy;
+  20 |     | 
+  21 |     |     // feature flags
+  22 |     |     bool supportsInternalTestingIface;
+  23 |     | 
+  24 | *   |     function initialize(
+  25 |     |         address _vault,
+  26 |     |         address _asset,
+  27 |     |         bool _supportsInternalTestingIface
+  28 |     |     ) internal {
+  29 | *   |         vault = IERC4626(_vault);
+  30 | *   |         asset = TestERC20Token(_asset);
+  31 | *   |         alice = new Actor(vault);
+  32 | *   |         bob = new Actor(vault);
+  33 | *   |         redemptionProxy = new RedemptionProxy(vault);
+  34 | *   |         supportsInternalTestingIface = _supportsInternalTestingIface;
+  35 |     |     }
+  36 |     | 
+  37 |     |     /// @notice Funds the `owner` address with `tokens` & forces a token approval for the vault to spend owner's tokens.
+  38 | *   |     function prepareAddressForDeposit(address owner, uint256 tokens) internal {
+  39 | *r  |         asset.mint(owner, tokens);
+  40 | *   |         asset.forceApproval(owner, address(vault), tokens);
+  41 |     |     }
+  42 |     | 
+  43 |     |     /// @notice Measures the `target`'s assets and shares, and emits events to assist in debugging property failures.
+  44 |     |     /// @param target A address to target
+  45 |     |     /// @param name A name for the target address (alice, bob, vault, etc.)
+  46 |     |     /// @param annotation An additional piece of metadata for debugging ie: "before deposit", "after mint", etc.
+  47 | *   |     function measureAddressHoldings(
+  48 |     |         address target,
+  49 |     |         string memory name,
+  50 |     |         string memory annotation
+  51 | *   |     ) internal returns (uint256 assetBalance, uint256 shareBalance) {
+  52 | *   |         assetBalance = asset.balanceOf(target);
+  53 | *   |         shareBalance = vault.balanceOf(target);
+  54 |     | 
+  55 | *   |         string memory assetMsg = string(
+  56 | *   |             abi.encodePacked("asset.balanceOf(", name, ") (", annotation, ")")
+  57 |     |         );
+  58 | *   |         emit LogUint256(assetMsg, assetBalance);
+  59 | *   |         string memory shareMsg = string(
+  60 | *   |             abi.encodePacked("vault.balanceOf(", name, ") (", annotation, ")")
+  61 |     |         );
+  62 | *   |         emit LogUint256(shareMsg, shareBalance);
+  63 |     |     }
+  64 |     | 
+  65 |     |     /// @notice Prevents `party` from resolving to addresses which have special accounting rules.
+  66 | *   |     function restrictAddressToThirdParties(
+  67 |     |         uint256 partyIndex
+  68 | *   |     ) internal view returns (address) {
+  69 |     |         // set up 3 static third parties
+  70 | *   |         partyIndex = partyIndex % 3;
+  71 | *   |         if (partyIndex == 0) {
+  72 | *   |             return address(this);
+  73 |     |         }
+  74 | *   |         if (partyIndex == 1) {
+  75 | *   |             return 0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa;
+  76 |     |         }
+  77 | *   |         return 0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB;
+  78 |     |     }
+  79 |     | 
+  80 |     |     /// @notice Performs all the checks required to ensure a successful vault deposit. This includes funding the owner account and clamping token amounts as needed.
+  81 |     |     ///         It is assumed that successful calls to requireValidDepositAmount imply that vault.deposit() will not revert. This implied property might not hold for certain
+  82 |     |     ///         vault implementations, and should be modified if exceptions are discovered.
+  83 | *   |     function requireValidDepositAmount(
+  84 |     |         address owner,
+  85 |     |         address receiver,
+  86 |     |         uint256 tokens
+  87 | *   |     ) internal returns (uint256) {
+  88 | *   |         tokens = clampLte(tokens, vault.maxDeposit(receiver));
+  89 | *   |         tokens = clampGt(tokens, 0);
+  90 | *   |         prepareAddressForDeposit(owner, tokens);
+  91 |     | 
+  92 |     |         // The following logic is intended to revert when an unreasonably large deposit is being made.
+  93 | *r  |         uint256 sharesMinted = vault.convertToShares(tokens);
+  94 | *   |         uint256 currentShares = vault.balanceOf(receiver);
+  95 | *r  |         vault.convertToAssets(sharesMinted + currentShares);
+  96 |     |         //uint256 sharesRedeemed = vault.previewWithdraw(tokensWithdrawn);
+  97 | *   |         emit LogUint256("Tokens to use in deposit:", tokens);
+  98 |     | 
+  99 |     |         // configure with setting?
+ 100 | *r  |         require(vault.previewDeposit(tokens) > 0);
+ 101 | *   |         return tokens;
+ 102 |     |     }
+ 103 |     | 
+ 104 |     |     /// @notice Performs all the checks required to ensure a successful vault mint. This includes funding the owner account and clamping token amounts as needed.
+ 105 |     |     ///         It is assumed that successful calls to requireValidDepositAmount imply that vault.mint() will not revert. This implied property might not hold for certain
+ 106 |     |     ///         vault implementations, and should be modified if exceptions are discovered.
+ 107 | *   |     function requireValidMintAmount(
+ 108 |     |         address owner,
+ 109 |     |         address receiver,
+ 110 |     |         uint256 shares
+ 111 | *   |     ) internal returns (uint256) {
+ 112 | *   |         shares = clampLte(shares, vault.maxMint(receiver));
+ 113 | *   |         uint256 tokensDeposited = vault.previewMint(shares);
+ 114 | *   |         prepareAddressForDeposit(owner, tokensDeposited);
+ 115 |     | 
+ 116 |     |         // The following logic is intended to revert when an unreasonably large mint is being made.
+ 117 | *   |         uint256 currentShares = vault.balanceOf(receiver);
+ 118 | *r  |         vault.previewRedeem(currentShares + shares);
+ 119 | *   |         emit LogUint256("Shares to use in mint:", shares);
+ 120 |     | 
+ 121 |     |         // configure with setting?
+ 122 |     |         // require(vault.previewMint(shares) > 0);
+ 123 | *   |         return shares;
+ 124 |     |     }
+ 125 |     | 
+ 126 |     |     /// @notice Performs all the checks required to ensure a successful vault redeem. This includes funding the owner account and clamping token amounts as needed.
+ 127 |     |     ///         It is assumed that successful calls to requireValidDepositAmount imply that vault.redeem() will not revert. This implied property might not hold for certain
+ 128 |     |     ///         vault implementations, and should be modified if exceptions are discovered.
+ 129 | *   |     function requireValidRedeemAmount(
+ 130 |     |         address owner,
+ 131 |     |         uint256 shares
+ 132 | *   |     ) internal returns (uint256) {
+ 133 |     |         // should this be a configured setting?
+ 134 | *r  |         require(shares > 0);
+ 135 |     | 
+ 136 | *   |         uint256 maxRedeem = vault.maxRedeem(owner);
+ 137 | *r  |         require(maxRedeem > 0);
+ 138 | *   |         uint256 ownerShares = vault.balanceOf(owner);
+ 139 | *   |         require(ownerShares > 0);
+ 140 |     | 
+ 141 | *   |         shares = clampLte(shares, maxRedeem);
+ 142 | *   |         shares = clampLte(shares, ownerShares);
+ 143 |     | 
+ 144 |     |         // The following logic is intended to revert when an unreasonably large redemption is being made.
+ 145 | *r  |         uint256 tokensWithdrawn = vault.convertToAssets(shares);
+ 146 | *   |         vault.previewRedeem(shares);
+ 147 |     |         // should this be a configured setting?
+ 148 | *r  |         require(tokensWithdrawn > 0);
+ 149 | *   |         emit LogUint256("Shares to use in redemption:", shares);
+ 150 | *   |         return shares;
+ 151 |     |     }
+ 152 |     | 
+ 153 |     |     /// @notice Performs all the checks required to ensure a successful vault withdraw. This includes funding the owner account and clamping token amounts as needed.
+ 154 |     |     ///         It is assumed that successful calls to requireValidDepositAmount imply that vault.withdraw() will not revert. This implied property might not hold for certain
+ 155 |     |     ///         vault implementations, and should be modified if exceptions are discovered.
+ 156 | *   |     function requireValidWithdrawAmount(
+ 157 |     |         address owner,
+ 158 |     |         uint256 tokens
+ 159 | *   |     ) internal returns (uint256) {
+ 160 | *r  |         uint256 maxWithdraw = vault.maxWithdraw(owner);
+ 161 | *r  |         require(maxWithdraw > 0);
+ 162 |     | 
+ 163 | *   |         uint256 ownerBalance = vault.balanceOf(owner);
+ 164 | *   |         require(ownerBalance > 0);
+ 165 |     | 
+ 166 | *r  |         uint256 sharesToRedeem = vault.previewWithdraw(tokens);
+ 167 | *   |         sharesToRedeem = clampLte(sharesToRedeem, vault.balanceOf(owner));
+ 168 | *   |         require(sharesToRedeem <= ownerBalance);
+ 169 |     | 
+ 170 |     |         // not easy to clamp these without making this code a lot more complex.
+ 171 | *   |         uint256 clampedTokens = vault.previewRedeem(sharesToRedeem);
+ 172 | *   |         require(clampedTokens <= maxWithdraw);
+ 173 |     |         // should this be a configured setting?
+ 174 | *r  |         require(sharesToRedeem > 0);
+ 175 |     | 
+ 176 |     |         // we don't need to check for unreasonably large withdraws because previewWithdraw would have reverted.
+ 177 | *   |         emit LogUint256("Tokens to use in withdraw:", clampedTokens);
+ 178 | *   |         return clampedTokens;
+ 179 |     |     }
+ 180 |     | }
+ 181 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/ERC4626/util/IERC4626Internal.sol
+  1 |     | // SPDX-License-Identifier: AGPL-3.0-or-later
+  2 |     | pragma solidity ^0.8.0;
+  3 |     | 
+  4 |     | /// @notice Developers may optionally implement these interfaces on their Vault contract to increase coverage/enable rounding tests.
+  5 |     | interface CryticIERC4626Internal {
+  6 |     |     /// @notice Called by the fuzzer. The vault implementation should use TestERC20Token.mint() to credit itself with the amount of profit.
+  7 |     |     function recognizeProfit(uint256 profit) external;
+  8 |     | 
+  9 |     |     /// @notice Called by the fuzzer. The vault implementation should use TestERC20Token.burn()/.transfer() to account for the amount of loss.
+ 10 |     |     function recognizeLoss(uint256 loss) external;
+ 11 |     | }
+ 12 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/ERC4626/util/RedemptionProxy.sol
+  1 |     | // SPDX-License-Identifier: AGPL-3.0-or-later
+  2 |     | pragma solidity ^0.8.0;
+  3 |     | 
+  4 |     | import {IERC4626} from "../../util/IERC4626.sol";
+  5 |     | 
+  6 | *   | contract RedemptionProxy {
+  7 |     |     IERC4626 vault;
+  8 |     | 
+  9 | *   |     constructor(IERC4626 _vault) {
+ 10 | *   |         vault = _vault;
+ 11 |     |     }
+ 12 |     | 
+ 13 | *   |     function redeemOnBehalf(
+ 14 |     |         uint256 shares,
+ 15 |     |         address receiver,
+ 16 |     |         address owner
+ 17 | *   |     ) public returns (uint256 tokensWithdrawn) {
+ 18 | *   |         tokensWithdrawn = vault.redeem(shares, receiver, owner);
+ 19 |     |     }
+ 20 |     | 
+ 21 | *   |     function withdrawOnBehalf(
+ 22 |     |         uint256 tokens,
+ 23 |     |         address receiver,
+ 24 |     |         address owner
+ 25 | *   |     ) public returns (uint256 sharesRedeemed) {
+ 26 | *   |         sharesRedeemed = vault.withdraw(tokens, receiver, owner);
+ 27 |     |     }
+ 28 |     | }
+ 29 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/ERC4626/util/TestERC20Token.sol
+  1 |     | // SPDX-License-Identifier: AGPL-3.0-or-later
+  2 |     | pragma solidity ^0.8.0;
+  3 |     | 
+  4 |     | import {IERC20} from "../../util/IERC20.sol";
+  5 |     | 
+  6 | *   | contract TestERC20Token is IERC20 {
+  7 |     |     string public name;
+  8 |     |     string public symbol;
+  9 | *   |     uint8 public decimals;
+ 10 | *   |     uint256 public totalSupply;
+ 11 | *   |     mapping(address => uint256) public balanceOf;
+ 12 |     |     mapping(address => mapping(address => uint256)) public allowance;
+ 13 |     | 
+ 14 | *   |     constructor(string memory _name, string memory _symbol, uint8 _decimals) {
+ 15 | *   |         name = _name;
+ 16 | *   |         symbol = _symbol;
+ 17 | *   |         decimals = _decimals;
+ 18 |     |     }
+ 19 |     | 
+ 20 | *   |     function approve(address spender, uint256 amount) public returns (bool) {
+ 21 | *   |         allowance[msg.sender][spender] = amount;
+ 22 |     | 
+ 23 | *   |         emit Approval(msg.sender, spender, amount);
+ 24 | *   |         return true;
+ 25 |     |     }
+ 26 |     | 
+ 27 | *   |     function transfer(address to, uint256 amount) public returns (bool) {
+ 28 | *   |         balanceOf[msg.sender] -= amount;
+ 29 | *   |         balanceOf[to] += amount;
+ 30 |     | 
+ 31 | *   |         emit Transfer(msg.sender, to, amount);
+ 32 | *   |         return true;
+ 33 |     |     }
+ 34 |     | 
+ 35 | *   |     function transferFrom(
+ 36 |     |         address from,
+ 37 |     |         address to,
+ 38 |     |         uint256 amount
+ 39 | *   |     ) public returns (bool) {
+ 40 | *   |         uint256 spenderAllowance = allowance[from][msg.sender];
+ 41 | *   |         if (spenderAllowance != type(uint256).max) {
+ 42 | *   |             allowance[from][msg.sender] = spenderAllowance - amount;
+ 43 |     |         }
+ 44 |     | 
+ 45 | *   |         balanceOf[from] -= amount;
+ 46 | *   |         balanceOf[to] += amount;
+ 47 |     | 
+ 48 | *   |         emit Transfer(from, to, amount);
+ 49 | *   |         return true;
+ 50 |     |     }
+ 51 |     | 
+ 52 | *   |     function mint(address to, uint256 amount) public {
+ 53 | *   |         totalSupply += amount;
+ 54 | *   |         balanceOf[to] += amount;
+ 55 |     | 
+ 56 | *   |         emit Transfer(address(0), to, amount);
+ 57 |     |     }
+ 58 |     | 
+ 59 | *   |     function burn(address from, uint256 amount) public {
+ 60 | *   |         totalSupply -= amount;
+ 61 | *   |         balanceOf[from] -= amount;
+ 62 |     | 
+ 63 | *   |         emit Transfer(from, address(0), amount);
+ 64 |     |     }
+ 65 |     | 
+ 66 | *   |     function forceApproval(
+ 67 |     |         address account,
+ 68 |     |         address spender,
+ 69 |     |         uint256 amount
+ 70 |     |     ) public {
+ 71 | *   |         allowance[account][spender] = amount;
+ 72 | *   |         emit Approval(account, spender, amount);
+ 73 |     |     }
+ 74 |     | }
+ 75 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/util/IERC20.sol
+  1 |     | // SPDX-License-Identifier: MIT
+  2 |     | pragma solidity ^0.8.0;
+  3 |     | 
+  4 |     | interface IERC20 {
+  5 |     |     /**
+  6 |     |      * @dev Emitted when `value` tokens are moved from one account (`from`) to
+  7 |     |      * another (`to`).
+  8 |     |      *
+  9 |     |      * Note that `value` may be zero.
+ 10 |     |      */
+ 11 |     |     event Transfer(address indexed from, address indexed to, uint256 value);
+ 12 |     | 
+ 13 |     |     /**
+ 14 |     |      * @dev Emitted when the allowance of a `spender` for an `owner` is set by
+ 15 |     |      * a call to {approve}. `value` is the new allowance.
+ 16 |     |      */
+ 17 |     |     event Approval(
+ 18 |     |         address indexed owner,
+ 19 |     |         address indexed spender,
+ 20 |     |         uint256 value
+ 21 |     |     );
+ 22 |     | 
+ 23 |     |     /**
+ 24 |     |      * @dev Returns the amount of tokens in existence.
+ 25 |     |      */
+ 26 |     |     function totalSupply() external view returns (uint256);
+ 27 |     | 
+ 28 |     |     /**
+ 29 |     |      * @dev Returns the amount of tokens owned by `account`.
+ 30 |     |      */
+ 31 |     |     function balanceOf(address account) external view returns (uint256);
+ 32 |     | 
+ 33 |     |     /**
+ 34 |     |      * @dev Moves `amount` tokens from the caller's account to `to`.
+ 35 |     |      *
+ 36 |     |      * Returns a boolean value indicating whether the operation succeeded.
+ 37 |     |      *
+ 38 |     |      * Emits a {Transfer} event.
+ 39 |     |      */
+ 40 |     |     function transfer(address to, uint256 amount) external returns (bool);
+ 41 |     | 
+ 42 |     |     /**
+ 43 |     |      * @dev Returns the remaining number of tokens that `spender` will be
+ 44 |     |      * allowed to spend on behalf of `owner` through {transferFrom}. This is
+ 45 |     |      * zero by default.
+ 46 |     |      *
+ 47 |     |      * This value changes when {approve} or {transferFrom} are called.
+ 48 |     |      */
+ 49 |     |     function allowance(
+ 50 |     |         address owner,
+ 51 |     |         address spender
+ 52 |     |     ) external view returns (uint256);
+ 53 |     | 
+ 54 |     |     /**
+ 55 |     |      * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
+ 56 |     |      *
+ 57 |     |      * Returns a boolean value indicating whether the operation succeeded.
+ 58 |     |      *
+ 59 |     |      * IMPORTANT: Beware that changing an allowance with this method brings the risk
+ 60 |     |      * that someone may use both the old and the new allowance by unfortunate
+ 61 |     |      * transaction ordering. One possible solution to mitigate this race
+ 62 |     |      * condition is to first reduce the spender's allowance to 0 and set the
+ 63 |     |      * desired value afterwards:
+ 64 |     |      * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
+ 65 |     |      *
+ 66 |     |      * Emits an {Approval} event.
+ 67 |     |      */
+ 68 |     |     function approve(address spender, uint256 amount) external returns (bool);
+ 69 |     | 
+ 70 |     |     /**
+ 71 |     |      * @dev Moves `amount` tokens from `from` to `to` using the
+ 72 |     |      * allowance mechanism. `amount` is then deducted from the caller's
+ 73 |     |      * allowance.
+ 74 |     |      *
+ 75 |     |      * Returns a boolean value indicating whether the operation succeeded.
+ 76 |     |      *
+ 77 |     |      * Emits a {Transfer} event.
+ 78 |     |      */
+ 79 |     |     function transferFrom(
+ 80 |     |         address from,
+ 81 |     |         address to,
+ 82 |     |         uint256 amount
+ 83 |     |     ) external returns (bool);
+ 84 |     | 
+ 85 |     |     function decimals() external returns (uint8);
+ 86 |     | }
+ 87 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/util/IERC4626.sol
+  1 |     | // SPDX-License-Identifier: MIT
+  2 |     | pragma solidity ^0.8.0;
+  3 |     | 
+  4 |     | import "./IERC20.sol";
+  5 |     | 
+  6 |     | interface IERC4626 is IERC20 {
+  7 |     |     event Deposit(
+  8 |     |         address indexed caller,
+  9 |     |         address indexed owner,
+ 10 |     |         uint256 assets,
+ 11 |     |         uint256 shares
+ 12 |     |     );
+ 13 |     | 
+ 14 |     |     event Withdraw(
+ 15 |     |         address indexed caller,
+ 16 |     |         address indexed receiver,
+ 17 |     |         address indexed owner,
+ 18 |     |         uint256 assets,
+ 19 |     |         uint256 shares
+ 20 |     |     );
+ 21 |     | 
+ 22 |     |     function asset() external view returns (IERC20);
+ 23 |     | 
+ 24 |     |     function deposit(
+ 25 |     |         uint256 assets,
+ 26 |     |         address receiver
+ 27 |     |     ) external returns (uint256 shares);
+ 28 |     | 
+ 29 |     |     function mint(
+ 30 |     |         uint256 shares,
+ 31 |     |         address receiver
+ 32 |     |     ) external returns (uint256 assets);
+ 33 |     | 
+ 34 |     |     function withdraw(
+ 35 |     |         uint256 assets,
+ 36 |     |         address receiver,
+ 37 |     |         address owner
+ 38 |     |     ) external returns (uint256 shares);
+ 39 |     | 
+ 40 |     |     function redeem(
+ 41 |     |         uint256 shares,
+ 42 |     |         address receiver,
+ 43 |     |         address owner
+ 44 |     |     ) external returns (uint256 assets);
+ 45 |     | 
+ 46 |     |     function totalAssets() external view returns (uint256);
+ 47 |     | 
+ 48 |     |     function convertToShares(uint256 assets) external view returns (uint256);
+ 49 |     | 
+ 50 |     |     function convertToAssets(uint256 shares) external view returns (uint256);
+ 51 |     | 
+ 52 |     |     function previewDeposit(uint256 assets) external view returns (uint256);
+ 53 |     | 
+ 54 |     |     function previewMint(uint256 shares) external view returns (uint256);
+ 55 |     | 
+ 56 |     |     function previewWithdraw(uint256 assets) external view returns (uint256);
+ 57 |     | 
+ 58 |     |     function previewRedeem(uint256 shares) external view returns (uint256);
+ 59 |     | 
+ 60 |     |     function maxDeposit(address) external view returns (uint256);
+ 61 |     | 
+ 62 |     |     function maxMint(address) external view returns (uint256);
+ 63 |     | 
+ 64 |     |     function maxWithdraw(address owner) external view returns (uint256);
+ 65 |     | 
+ 66 |     |     function maxRedeem(address owner) external view returns (uint256);
+ 67 |     | }
+ 68 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/properties/contracts/util/PropertiesHelper.sol
+   1 |     | // SPDX-License-Identifier: AGPL-3.0-or-later
+   2 |     | pragma solidity ^0.8.0;
+   3 |     | 
+   4 |     | abstract contract PropertiesAsserts {
+   5 |     |     event LogUint256(string, uint256);
+   6 |     |     event LogAddress(string, address);
+   7 |     |     event LogString(string);
+   8 |     | 
+   9 |     |     event AssertFail(string);
+  10 |     |     event AssertEqFail(string);
+  11 |     |     event AssertNeqFail(string);
+  12 |     |     event AssertGteFail(string);
+  13 |     |     event AssertGtFail(string);
+  14 |     |     event AssertLteFail(string);
+  15 |     |     event AssertLtFail(string);
+  16 |     | 
+  17 | *   |     function assertWithMsg(bool b, string memory reason) internal {
+  18 | *   |         if (!b) {
+  19 | *   |             emit AssertFail(reason);
+  20 | *   |             assert(false);
+  21 |     |         }
+  22 |     |     }
+  23 |     | 
+  24 |     |     /// @notice asserts that a is equal to b. Violations are logged using reason.
+  25 | *   |     function assertEq(uint256 a, uint256 b, string memory reason) internal {
+  26 | *   |         if (a != b) {
+  27 | *   |             string memory aStr = PropertiesLibString.toString(a);
+  28 | *   |             string memory bStr = PropertiesLibString.toString(b);
+  29 | *   |             bytes memory assertMsg = abi.encodePacked(
+  30 |     |                 "Invalid: ",
+  31 | *   |                 aStr,
+  32 |     |                 "!=",
+  33 | *   |                 bStr,
+  34 |     |                 ", reason: ",
+  35 | *   |                 reason
+  36 |     |             );
+  37 | *   |             emit AssertEqFail(string(assertMsg));
+  38 | *   |             assert(false);
+  39 |     |         }
+  40 |     |     }
+  41 |     | 
+  42 |     |     /// @notice int256 version of assertEq
+  43 |     |     function assertEq(int256 a, int256 b, string memory reason) internal {
+  44 |     |         if (a != b) {
+  45 |     |             string memory aStr = PropertiesLibString.toString(a);
+  46 |     |             string memory bStr = PropertiesLibString.toString(b);
+  47 |     |             bytes memory assertMsg = abi.encodePacked(
+  48 |     |                 "Invalid: ",
+  49 |     |                 aStr,
+  50 |     |                 "!=",
+  51 |     |                 bStr,
+  52 |     |                 ", reason: ",
+  53 |     |                 reason
+  54 |     |             );
+  55 |     |             emit AssertEqFail(string(assertMsg));
+  56 |     |             assert(false);
+  57 |     |         }
+  58 |     |     }
+  59 |     | 
+  60 |     |     /// @notice asserts that a is not equal to b. Violations are logged using reason.
+  61 | *   |     function assertNeq(uint256 a, uint256 b, string memory reason) internal {
+  62 | *   |         if (a == b) {
+  63 |     |             string memory aStr = PropertiesLibString.toString(a);
+  64 |     |             string memory bStr = PropertiesLibString.toString(b);
+  65 |     |             bytes memory assertMsg = abi.encodePacked(
+  66 |     |                 "Invalid: ",
+  67 |     |                 aStr,
+  68 |     |                 "==",
+  69 |     |                 bStr,
+  70 |     |                 ", reason: ",
+  71 |     |                 reason
+  72 |     |             );
+  73 |     |             emit AssertNeqFail(string(assertMsg));
+  74 |     |             assert(false);
+  75 |     |         }
+  76 |     |     }
+  77 |     | 
+  78 |     |     /// @notice int256 version of assertNeq
+  79 |     |     function assertNeq(int256 a, int256 b, string memory reason) internal {
+  80 |     |         if (a == b) {
+  81 |     |             string memory aStr = PropertiesLibString.toString(a);
+  82 |     |             string memory bStr = PropertiesLibString.toString(b);
+  83 |     |             bytes memory assertMsg = abi.encodePacked(
+  84 |     |                 "Invalid: ",
+  85 |     |                 aStr,
+  86 |     |                 "==",
+  87 |     |                 bStr,
+  88 |     |                 ", reason: ",
+  89 |     |                 reason
+  90 |     |             );
+  91 |     |             emit AssertNeqFail(string(assertMsg));
+  92 |     |             assert(false);
+  93 |     |         }
+  94 |     |     }
+  95 |     | 
+  96 |     |     /// @notice asserts that a is greater than or equal to b. Violations are logged using reason.
+  97 | *   |     function assertGte(uint256 a, uint256 b, string memory reason) internal {
+  98 | *   |         if (!(a >= b)) {
+  99 |     |             string memory aStr = PropertiesLibString.toString(a);
+ 100 |     |             string memory bStr = PropertiesLibString.toString(b);
+ 101 |     |             bytes memory assertMsg = abi.encodePacked(
+ 102 |     |                 "Invalid: ",
+ 103 |     |                 aStr,
+ 104 |     |                 "<",
+ 105 |     |                 bStr,
+ 106 |     |                 " failed, reason: ",
+ 107 |     |                 reason
+ 108 |     |             );
+ 109 |     |             emit AssertGteFail(string(assertMsg));
+ 110 |     |             assert(false);
+ 111 |     |         }
+ 112 |     |     }
+ 113 |     | 
+ 114 |     |     /// @notice int256 version of assertGte
+ 115 |     |     function assertGte(int256 a, int256 b, string memory reason) internal {
+ 116 |     |         if (!(a >= b)) {
+ 117 |     |             string memory aStr = PropertiesLibString.toString(a);
+ 118 |     |             string memory bStr = PropertiesLibString.toString(b);
+ 119 |     |             bytes memory assertMsg = abi.encodePacked(
+ 120 |     |                 "Invalid: ",
+ 121 |     |                 aStr,
+ 122 |     |                 "<",
+ 123 |     |                 bStr,
+ 124 |     |                 " failed, reason: ",
+ 125 |     |                 reason
+ 126 |     |             );
+ 127 |     |             emit AssertGteFail(string(assertMsg));
+ 128 |     |             assert(false);
+ 129 |     |         }
+ 130 |     |     }
+ 131 |     | 
+ 132 |     |     /// @notice asserts that a is greater than b. Violations are logged using reason.
+ 133 | *   |     function assertGt(uint256 a, uint256 b, string memory reason) internal {
+ 134 | *   |         if (!(a > b)) {
+ 135 |     |             string memory aStr = PropertiesLibString.toString(a);
+ 136 |     |             string memory bStr = PropertiesLibString.toString(b);
+ 137 |     |             bytes memory assertMsg = abi.encodePacked(
+ 138 |     |                 "Invalid: ",
+ 139 |     |                 aStr,
+ 140 |     |                 "<=",
+ 141 |     |                 bStr,
+ 142 |     |                 " failed, reason: ",
+ 143 |     |                 reason
+ 144 |     |             );
+ 145 |     |             emit AssertGtFail(string(assertMsg));
+ 146 |     |             assert(false);
+ 147 |     |         }
+ 148 |     |     }
+ 149 |     | 
+ 150 |     |     /// @notice int256 version of assertGt
+ 151 |     |     function assertGt(int256 a, int256 b, string memory reason) internal {
+ 152 |     |         if (!(a > b)) {
+ 153 |     |             string memory aStr = PropertiesLibString.toString(a);
+ 154 |     |             string memory bStr = PropertiesLibString.toString(b);
+ 155 |     |             bytes memory assertMsg = abi.encodePacked(
+ 156 |     |                 "Invalid: ",
+ 157 |     |                 aStr,
+ 158 |     |                 "<=",
+ 159 |     |                 bStr,
+ 160 |     |                 " failed, reason: ",
+ 161 |     |                 reason
+ 162 |     |             );
+ 163 |     |             emit AssertGtFail(string(assertMsg));
+ 164 |     |             assert(false);
+ 165 |     |         }
+ 166 |     |     }
+ 167 |     | 
+ 168 |     |     /// @notice asserts that a is less than or equal to b. Violations are logged using reason.
+ 169 | *   |     function assertLte(uint256 a, uint256 b, string memory reason) internal {
+ 170 | *   |         if (!(a <= b)) {
+ 171 |     |             string memory aStr = PropertiesLibString.toString(a);
+ 172 |     |             string memory bStr = PropertiesLibString.toString(b);
+ 173 |     |             bytes memory assertMsg = abi.encodePacked(
+ 174 |     |                 "Invalid: ",
+ 175 |     |                 aStr,
+ 176 |     |                 ">",
+ 177 |     |                 bStr,
+ 178 |     |                 " failed, reason: ",
+ 179 |     |                 reason
+ 180 |     |             );
+ 181 |     |             emit AssertLteFail(string(assertMsg));
+ 182 |     |             assert(false);
+ 183 |     |         }
+ 184 |     |     }
+ 185 |     | 
+ 186 |     |     /// @notice int256 version of assertLte
+ 187 |     |     function assertLte(int256 a, int256 b, string memory reason) internal {
+ 188 |     |         if (!(a <= b)) {
+ 189 |     |             string memory aStr = PropertiesLibString.toString(a);
+ 190 |     |             string memory bStr = PropertiesLibString.toString(b);
+ 191 |     |             bytes memory assertMsg = abi.encodePacked(
+ 192 |     |                 "Invalid: ",
+ 193 |     |                 aStr,
+ 194 |     |                 ">",
+ 195 |     |                 bStr,
+ 196 |     |                 " failed, reason: ",
+ 197 |     |                 reason
+ 198 |     |             );
+ 199 |     |             emit AssertLteFail(string(assertMsg));
+ 200 |     |             assert(false);
+ 201 |     |         }
+ 202 |     |     }
+ 203 |     | 
+ 204 |     |     /// @notice asserts that a is less than b. Violations are logged using reason.
+ 205 |     |     function assertLt(uint256 a, uint256 b, string memory reason) internal {
+ 206 |     |         if (!(a < b)) {
+ 207 |     |             string memory aStr = PropertiesLibString.toString(a);
+ 208 |     |             string memory bStr = PropertiesLibString.toString(b);
+ 209 |     |             bytes memory assertMsg = abi.encodePacked(
+ 210 |     |                 "Invalid: ",
+ 211 |     |                 aStr,
+ 212 |     |                 ">=",
+ 213 |     |                 bStr,
+ 214 |     |                 " failed, reason: ",
+ 215 |     |                 reason
+ 216 |     |             );
+ 217 |     |             emit AssertLtFail(string(assertMsg));
+ 218 |     |             assert(false);
+ 219 |     |         }
+ 220 |     |     }
+ 221 |     | 
+ 222 |     |     /// @notice int256 version of assertLt
+ 223 |     |     function assertLt(int256 a, int256 b, string memory reason) internal {
+ 224 |     |         if (!(a < b)) {
+ 225 |     |             string memory aStr = PropertiesLibString.toString(a);
+ 226 |     |             string memory bStr = PropertiesLibString.toString(b);
+ 227 |     |             bytes memory assertMsg = abi.encodePacked(
+ 228 |     |                 "Invalid: ",
+ 229 |     |                 aStr,
+ 230 |     |                 ">=",
+ 231 |     |                 bStr,
+ 232 |     |                 " failed, reason: ",
+ 233 |     |                 reason
+ 234 |     |             );
+ 235 |     |             emit AssertLtFail(string(assertMsg));
+ 236 |     |             assert(false);
+ 237 |     |         }
+ 238 |     |     }
+ 239 |     | 
+ 240 |     |     /// @notice Clamps value to be between low and high, both inclusive
+ 241 |     |     function clampBetween(
+ 242 |     |         uint256 value,
+ 243 |     |         uint256 low,
+ 244 |     |         uint256 high
+ 245 |     |     ) internal returns (uint256) {
+ 246 |     |         if (value < low || value > high) {
+ 247 |     |             uint ans = low + (value % (high - low + 1));
+ 248 |     |             string memory valueStr = PropertiesLibString.toString(value);
+ 249 |     |             string memory ansStr = PropertiesLibString.toString(ans);
+ 250 |     |             bytes memory message = abi.encodePacked(
+ 251 |     |                 "Clamping value ",
+ 252 |     |                 valueStr,
+ 253 |     |                 " to ",
+ 254 |     |                 ansStr
+ 255 |     |             );
+ 256 |     |             emit LogString(string(message));
+ 257 |     |             return ans;
+ 258 |     |         }
+ 259 |     |         return value;
+ 260 |     |     }
+ 261 |     | 
+ 262 |     |     /// @notice int256 version of clampBetween
+ 263 |     |     function clampBetween(
+ 264 |     |         int256 value,
+ 265 |     |         int256 low,
+ 266 |     |         int256 high
+ 267 |     |     ) internal returns (int256) {
+ 268 |     |         if (value < low || value > high) {
+ 269 |     |             int range = high - low + 1;
+ 270 |     |             int clamped = (value - low) % (range);
+ 271 |     |             if (clamped < 0) clamped += range;
+ 272 |     |             int ans = low + clamped;
+ 273 |     |             string memory valueStr = PropertiesLibString.toString(value);
+ 274 |     |             string memory ansStr = PropertiesLibString.toString(ans);
+ 275 |     |             bytes memory message = abi.encodePacked(
+ 276 |     |                 "Clamping value ",
+ 277 |     |                 valueStr,
+ 278 |     |                 " to ",
+ 279 |     |                 ansStr
+ 280 |     |             );
+ 281 |     |             emit LogString(string(message));
+ 282 |     |             return ans;
+ 283 |     |         }
+ 284 |     |         return value;
+ 285 |     |     }
+ 286 |     | 
+ 287 |     |     /// @notice clamps a to be less than b
+ 288 |     |     function clampLt(uint256 a, uint256 b) internal returns (uint256) {
+ 289 |     |         if (!(a < b)) {
+ 290 |     |             assertNeq(
+ 291 |     |                 b,
+ 292 |     |                 0,
+ 293 |     |                 "clampLt cannot clamp value a to be less than zero. Check your inputs/assumptions."
+ 294 |     |             );
+ 295 |     |             uint256 value = a % b;
+ 296 |     |             string memory aStr = PropertiesLibString.toString(a);
+ 297 |     |             string memory valueStr = PropertiesLibString.toString(value);
+ 298 |     |             bytes memory message = abi.encodePacked(
+ 299 |     |                 "Clamping value ",
+ 300 |     |                 aStr,
+ 301 |     |                 " to ",
+ 302 |     |                 valueStr
+ 303 |     |             );
+ 304 |     |             emit LogString(string(message));
+ 305 |     |             return value;
+ 306 |     |         }
+ 307 |     |         return a;
+ 308 |     |     }
+ 309 |     | 
+ 310 |     |     /// @notice int256 version of clampLt
+ 311 |     |     function clampLt(int256 a, int256 b) internal returns (int256) {
+ 312 |     |         if (!(a < b)) {
+ 313 |     |             int256 value = b - 1;
+ 314 |     |             string memory aStr = PropertiesLibString.toString(a);
+ 315 |     |             string memory valueStr = PropertiesLibString.toString(value);
+ 316 |     |             bytes memory message = abi.encodePacked(
+ 317 |     |                 "Clamping value ",
+ 318 |     |                 aStr,
+ 319 |     |                 " to ",
+ 320 |     |                 valueStr
+ 321 |     |             );
+ 322 |     |             emit LogString(string(message));
+ 323 |     |             return value;
+ 324 |     |         }
+ 325 |     |         return a;
+ 326 |     |     }
+ 327 |     | 
+ 328 |     |     /// @notice clamps a to be less than or equal to b
+ 329 | *   |     function clampLte(uint256 a, uint256 b) internal returns (uint256) {
+ 330 | *   |         if (!(a <= b)) {
+ 331 | *   |             uint256 value = a % (b + 1);
+ 332 | *   |             string memory aStr = PropertiesLibString.toString(a);
+ 333 | *   |             string memory valueStr = PropertiesLibString.toString(value);
+ 334 | *   |             bytes memory message = abi.encodePacked(
+ 335 |     |                 "Clamping value ",
+ 336 | *   |                 aStr,
+ 337 |     |                 " to ",
+ 338 | *   |                 valueStr
+ 339 |     |             );
+ 340 | *   |             emit LogString(string(message));
+ 341 | *   |             return value;
+ 342 |     |         }
+ 343 | *   |         return a;
+ 344 |     |     }
+ 345 |     | 
+ 346 |     |     /// @notice int256 version of clampLte
+ 347 |     |     function clampLte(int256 a, int256 b) internal returns (int256) {
+ 348 |     |         if (!(a <= b)) {
+ 349 |     |             int256 value = b;
+ 350 |     |             string memory aStr = PropertiesLibString.toString(a);
+ 351 |     |             string memory valueStr = PropertiesLibString.toString(value);
+ 352 |     |             bytes memory message = abi.encodePacked(
+ 353 |     |                 "Clamping value ",
+ 354 |     |                 aStr,
+ 355 |     |                 " to ",
+ 356 |     |                 valueStr
+ 357 |     |             );
+ 358 |     |             emit LogString(string(message));
+ 359 |     |             return value;
+ 360 |     |         }
+ 361 |     |         return a;
+ 362 |     |     }
+ 363 |     | 
+ 364 |     |     /// @notice clamps a to be greater than b
+ 365 | *   |     function clampGt(uint256 a, uint256 b) internal returns (uint256) {
+ 366 | *   |         if (!(a > b)) {
+ 367 | *   |             assertNeq(
+ 368 | *   |                 b,
+ 369 | *   |                 type(uint256).max,
+ 370 |     |                 "clampGt cannot clamp value a to be larger than uint256.max. Check your inputs/assumptions."
+ 371 |     |             );
+ 372 | *   |             uint256 value = b + 1;
+ 373 | *   |             string memory aStr = PropertiesLibString.toString(a);
+ 374 | *   |             string memory valueStr = PropertiesLibString.toString(value);
+ 375 | *   |             bytes memory message = abi.encodePacked(
+ 376 |     |                 "Clamping value ",
+ 377 | *   |                 aStr,
+ 378 |     |                 " to ",
+ 379 | *   |                 valueStr
+ 380 |     |             );
+ 381 | *   |             emit LogString(string(message));
+ 382 | *   |             return value;
+ 383 |     |         } else {
+ 384 | *   |             return a;
+ 385 |     |         }
+ 386 |     |     }
+ 387 |     | 
+ 388 |     |     /// @notice int256 version of clampGt
+ 389 |     |     function clampGt(int256 a, int256 b) internal returns (int256) {
+ 390 |     |         if (!(a > b)) {
+ 391 |     |             int256 value = b + 1;
+ 392 |     |             string memory aStr = PropertiesLibString.toString(a);
+ 393 |     |             string memory valueStr = PropertiesLibString.toString(value);
+ 394 |     |             bytes memory message = abi.encodePacked(
+ 395 |     |                 "Clamping value ",
+ 396 |     |                 aStr,
+ 397 |     |                 " to ",
+ 398 |     |                 valueStr
+ 399 |     |             );
+ 400 |     |             emit LogString(string(message));
+ 401 |     |             return value;
+ 402 |     |         } else {
+ 403 |     |             return a;
+ 404 |     |         }
+ 405 |     |     }
+ 406 |     | 
+ 407 |     |     /// @notice clamps a to be greater than or equal to b
+ 408 |     |     function clampGte(uint256 a, uint256 b) internal returns (uint256) {
+ 409 |     |         if (!(a > b)) {
+ 410 |     |             uint256 value = b;
+ 411 |     |             string memory aStr = PropertiesLibString.toString(a);
+ 412 |     |             string memory valueStr = PropertiesLibString.toString(value);
+ 413 |     |             bytes memory message = abi.encodePacked(
+ 414 |     |                 "Clamping value ",
+ 415 |     |                 aStr,
+ 416 |     |                 " to ",
+ 417 |     |                 valueStr
+ 418 |     |             );
+ 419 |     |             emit LogString(string(message));
+ 420 |     |             return value;
+ 421 |     |         }
+ 422 |     |         return a;
+ 423 |     |     }
+ 424 |     | 
+ 425 |     |     /// @notice int256 version of clampGte
+ 426 |     |     function clampGte(int256 a, int256 b) internal returns (int256) {
+ 427 |     |         if (!(a > b)) {
+ 428 |     |             int256 value = b;
+ 429 |     |             string memory aStr = PropertiesLibString.toString(a);
+ 430 |     |             string memory valueStr = PropertiesLibString.toString(value);
+ 431 |     |             bytes memory message = abi.encodePacked(
+ 432 |     |                 "Clamping value ",
+ 433 |     |                 aStr,
+ 434 |     |                 " to ",
+ 435 |     |                 valueStr
+ 436 |     |             );
+ 437 |     |             emit LogString(string(message));
+ 438 |     |             return value;
+ 439 |     |         }
+ 440 |     |         return a;
+ 441 |     |     }
+ 442 |     | }
+ 443 |     | 
+ 444 |     | /// @notice Efficient library for creating string representations of integers.
+ 445 |     | /// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/utils/LibString.sol)
+ 446 |     | /// @author Modified from Solady (https://github.com/Vectorized/solady/blob/main/src/utils/LibString.sol)
+ 447 |     | /// @dev Name of the library is modified to prevent collisions with contract-under-test uses of LibString
+ 448 |     | library PropertiesLibString {
+ 449 |     |     function toString(int256 value) internal pure returns (string memory str) {
+ 450 |     |         uint256 absValue = value >= 0 ? uint256(value) : uint256(-value);
+ 451 |     |         str = toString(absValue);
+ 452 |     | 
+ 453 |     |         if (value < 0) {
+ 454 |     |             str = string(abi.encodePacked("-", str));
+ 455 |     |         }
+ 456 |     |     }
+ 457 |     | 
+ 458 | *   |     function toString(uint256 value) internal pure returns (string memory str) {
+ 459 |     |         /// @solidity memory-safe-assembly
+ 460 | *   |         assembly {
+ 461 |     |             // The maximum value of a uint256 contains 78 digits (1 byte per digit), but we allocate 160 bytes
+ 462 |     |             // to keep the free memory pointer word aligned. We'll need 1 word for the length, 1 word for the
+ 463 |     |             // trailing zeros padding, and 3 other words for a max of 78 digits. In total: 5 * 32 = 160 bytes.
+ 464 | *   |             let newFreeMemoryPointer := add(mload(0x40), 160)
+ 465 |     | 
+ 466 |     |             // Update the free memory pointer to avoid overriding our string.
+ 467 | *   |             mstore(0x40, newFreeMemoryPointer)
+ 468 |     | 
+ 469 |     |             // Assign str to the end of the zone of newly allocated memory.
+ 470 | *   |             str := sub(newFreeMemoryPointer, 32)
+ 471 |     | 
+ 472 |     |             // Clean the last word of memory it may not be overwritten.
+ 473 | *   |             mstore(str, 0)
+ 474 |     | 
+ 475 |     |             // Cache the end of the memory to calculate the length later.
+ 476 | *   |             let end := str
+ 477 |     | 
+ 478 |     |             // We write the string from rightmost digit to leftmost digit.
+ 479 |     |             // The following is essentially a do-while loop that also handles the zero case.
+ 480 |     |             // prettier-ignore
+ 481 | *   |             for { let temp := value } 1 {} {
+ 482 |     |                 // Move the pointer 1 byte to the left.
+ 483 | *   |                 str := sub(str, 1)
+ 484 |     | 
+ 485 |     |                 // Write the character to the pointer.
+ 486 |     |                 // The ASCII index of the '0' character is 48.
+ 487 | *   |                 mstore8(str, add(48, mod(temp, 10)))
+ 488 |     | 
+ 489 |     |                 // Keep dividing temp until zero.
+ 490 | *   |                 temp := div(temp, 10)
+ 491 |     | 
+ 492 |     |                  // prettier-ignore
+ 493 | *   |                 if iszero(temp) { break }
+ 494 |     |             }
+ 495 |     | 
+ 496 |     |             // Compute and cache the final total length of the string.
+ 497 | *   |             let length := sub(end, str)
+ 498 |     | 
+ 499 |     |             // Move the pointer 32 bytes leftwards to make room for the length.
+ 500 | *   |             str := sub(str, 32)
+ 501 |     | 
+ 502 |     |             // Store the string's length at the start of memory allocated for our string.
+ 503 | *   |             mstore(str, length)
+ 504 |     |         }
+ 505 |     |     }
+ 506 |     | 
+ 507 |     |     function toString(address value) internal pure returns (string memory str) {
+ 508 |     |         bytes memory s = new bytes(40);
+ 509 |     |         for (uint i = 0; i < 20; i++) {
+ 510 |     |             bytes1 b = bytes1(
+ 511 |     |                 uint8(uint(uint160(value)) / (2 ** (8 * (19 - i))))
+ 512 |     |             );
+ 513 |     |             bytes1 hi = bytes1(uint8(b) / 16);
+ 514 |     |             bytes1 lo = bytes1(uint8(b) - 16 * uint8(hi));
+ 515 |     |             s[2 * i] = char(hi);
+ 516 |     |             s[2 * i + 1] = char(lo);
+ 517 |     |         }
+ 518 |     |         return string(s);
+ 519 |     |     }
+ 520 |     | 
+ 521 |     |     function char(bytes1 b) internal pure returns (bytes1 c) {
+ 522 |     |         if (uint8(b) < 10) return bytes1(uint8(b) + 0x30);
+ 523 |     |         else return bytes1(uint8(b) + 0x57);
+ 524 |     |     }
+ 525 |     | }
+ 526 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/solmate/src/tokens/ERC20.sol
+   1 |     | // SPDX-License-Identifier: AGPL-3.0-only
+   2 |     | pragma solidity >=0.8.0;
+   3 |     | 
+   4 |     | /// @notice Modern and gas efficient ERC20 + EIP-2612 implementation.
+   5 |     | /// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/tokens/ERC20.sol)
+   6 |     | /// @author Modified from Uniswap (https://github.com/Uniswap/uniswap-v2-core/blob/master/contracts/UniswapV2ERC20.sol)
+   7 |     | /// @dev Do not manually set balances without updating totalSupply, as the sum of all user balances must not exceed it.
+   8 |     | abstract contract ERC20 {
+   9 |     |     /*//////////////////////////////////////////////////////////////
+  10 |     |                                  EVENTS
+  11 |     |     //////////////////////////////////////////////////////////////*/
+  12 |     | 
+  13 |     |     event Transfer(address indexed from, address indexed to, uint256 amount);
+  14 |     | 
+  15 |     |     event Approval(address indexed owner, address indexed spender, uint256 amount);
+  16 |     | 
+  17 |     |     /*//////////////////////////////////////////////////////////////
+  18 |     |                             METADATA STORAGE
+  19 |     |     //////////////////////////////////////////////////////////////*/
+  20 |     | 
+  21 |     |     string public name;
+  22 |     | 
+  23 |     |     string public symbol;
+  24 |     | 
+  25 | *   |     uint8 public immutable decimals;
+  26 |     | 
+  27 |     |     /*//////////////////////////////////////////////////////////////
+  28 |     |                               ERC20 STORAGE
+  29 |     |     //////////////////////////////////////////////////////////////*/
+  30 |     | 
+  31 | *   |     uint256 public totalSupply;
+  32 |     | 
+  33 | *   |     mapping(address => uint256) public balanceOf;
+  34 |     | 
+  35 | *   |     mapping(address => mapping(address => uint256)) public allowance;
+  36 |     | 
+  37 |     |     /*//////////////////////////////////////////////////////////////
+  38 |     |                             EIP-2612 STORAGE
+  39 |     |     //////////////////////////////////////////////////////////////*/
+  40 |     | 
+  41 |     |     uint256 internal immutable INITIAL_CHAIN_ID;
+  42 |     | 
+  43 |     |     bytes32 internal immutable INITIAL_DOMAIN_SEPARATOR;
+  44 |     | 
+  45 |     |     mapping(address => uint256) public nonces;
+  46 |     | 
+  47 |     |     /*//////////////////////////////////////////////////////////////
+  48 |     |                                CONSTRUCTOR
+  49 |     |     //////////////////////////////////////////////////////////////*/
+  50 |     | 
+  51 | *   |     constructor(
+  52 |     |         string memory _name,
+  53 |     |         string memory _symbol,
+  54 |     |         uint8 _decimals
+  55 |     |     ) {
+  56 | *   |         name = _name;
+  57 | *   |         symbol = _symbol;
+  58 | *   |         decimals = _decimals;
+  59 |     | 
+  60 | *   |         INITIAL_CHAIN_ID = block.chainid;
+  61 | *   |         INITIAL_DOMAIN_SEPARATOR = computeDomainSeparator();
+  62 |     |     }
+  63 |     | 
+  64 |     |     /*//////////////////////////////////////////////////////////////
+  65 |     |                                ERC20 LOGIC
+  66 |     |     //////////////////////////////////////////////////////////////*/
+  67 |     | 
+  68 | *   |     function approve(address spender, uint256 amount) public virtual returns (bool) {
+  69 | *   |         allowance[msg.sender][spender] = amount;
+  70 |     | 
+  71 | *   |         emit Approval(msg.sender, spender, amount);
+  72 |     | 
+  73 | *   |         return true;
+  74 |     |     }
+  75 |     | 
+  76 |     |     function transfer(address to, uint256 amount) public virtual returns (bool) {
+  77 |     |         balanceOf[msg.sender] -= amount;
+  78 |     | 
+  79 |     |         // Cannot overflow because the sum of all user
+  80 |     |         // balances can't exceed the max uint256 value.
+  81 |     |         unchecked {
+  82 |     |             balanceOf[to] += amount;
+  83 |     |         }
+  84 |     | 
+  85 |     |         emit Transfer(msg.sender, to, amount);
+  86 |     | 
+  87 |     |         return true;
+  88 |     |     }
+  89 |     | 
+  90 |     |     function transferFrom(
+  91 |     |         address from,
+  92 |     |         address to,
+  93 |     |         uint256 amount
+  94 |     |     ) public virtual returns (bool) {
+  95 |     |         uint256 allowed = allowance[from][msg.sender]; // Saves gas for limited approvals.
+  96 |     | 
+  97 |     |         if (allowed != type(uint256).max) allowance[from][msg.sender] = allowed - amount;
+  98 |     | 
+  99 |     |         balanceOf[from] -= amount;
+ 100 |     | 
+ 101 |     |         // Cannot overflow because the sum of all user
+ 102 |     |         // balances can't exceed the max uint256 value.
+ 103 |     |         unchecked {
+ 104 |     |             balanceOf[to] += amount;
+ 105 |     |         }
+ 106 |     | 
+ 107 |     |         emit Transfer(from, to, amount);
+ 108 |     | 
+ 109 |     |         return true;
+ 110 |     |     }
+ 111 |     | 
+ 112 |     |     /*//////////////////////////////////////////////////////////////
+ 113 |     |                              EIP-2612 LOGIC
+ 114 |     |     //////////////////////////////////////////////////////////////*/
+ 115 |     | 
+ 116 |     |     function permit(
+ 117 |     |         address owner,
+ 118 |     |         address spender,
+ 119 |     |         uint256 value,
+ 120 |     |         uint256 deadline,
+ 121 |     |         uint8 v,
+ 122 |     |         bytes32 r,
+ 123 |     |         bytes32 s
+ 124 |     |     ) public virtual {
+ 125 |     |         require(deadline >= block.timestamp, "PERMIT_DEADLINE_EXPIRED");
+ 126 |     | 
+ 127 |     |         // Unchecked because the only math done is incrementing
+ 128 |     |         // the owner's nonce which cannot realistically overflow.
+ 129 |     |         unchecked {
+ 130 |     |             address recoveredAddress = ecrecover(
+ 131 |     |                 keccak256(
+ 132 |     |                     abi.encodePacked(
+ 133 |     |                         "\x19\x01",
+ 134 |     |                         DOMAIN_SEPARATOR(),
+ 135 |     |                         keccak256(
+ 136 |     |                             abi.encode(
+ 137 |     |                                 keccak256(
+ 138 |     |                                     "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
+ 139 |     |                                 ),
+ 140 |     |                                 owner,
+ 141 |     |                                 spender,
+ 142 |     |                                 value,
+ 143 |     |                                 nonces[owner]++,
+ 144 |     |                                 deadline
+ 145 |     |                             )
+ 146 |     |                         )
+ 147 |     |                     )
+ 148 |     |                 ),
+ 149 |     |                 v,
+ 150 |     |                 r,
+ 151 |     |                 s
+ 152 |     |             );
+ 153 |     | 
+ 154 |     |             require(recoveredAddress != address(0) && recoveredAddress == owner, "INVALID_SIGNER");
+ 155 |     | 
+ 156 |     |             allowance[recoveredAddress][spender] = value;
+ 157 |     |         }
+ 158 |     | 
+ 159 |     |         emit Approval(owner, spender, value);
+ 160 |     |     }
+ 161 |     | 
+ 162 |     |     function DOMAIN_SEPARATOR() public view virtual returns (bytes32) {
+ 163 |     |         return block.chainid == INITIAL_CHAIN_ID ? INITIAL_DOMAIN_SEPARATOR : computeDomainSeparator();
+ 164 |     |     }
+ 165 |     | 
+ 166 | *   |     function computeDomainSeparator() internal view virtual returns (bytes32) {
+ 167 | *   |         return
+ 168 | *   |             keccak256(
+ 169 | *   |                 abi.encode(
+ 170 | *   |                     keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+ 171 | *   |                     keccak256(bytes(name)),
+ 172 | *   |                     keccak256("1"),
+ 173 | *   |                     block.chainid,
+ 174 | *   |                     address(this)
+ 175 |     |                 )
+ 176 |     |             );
+ 177 |     |     }
+ 178 |     | 
+ 179 |     |     /*//////////////////////////////////////////////////////////////
+ 180 |     |                         INTERNAL MINT/BURN LOGIC
+ 181 |     |     //////////////////////////////////////////////////////////////*/
+ 182 |     | 
+ 183 | *   |     function _mint(address to, uint256 amount) internal virtual {
+ 184 | *   |         totalSupply += amount;
+ 185 |     | 
+ 186 |     |         // Cannot overflow because the sum of all user
+ 187 |     |         // balances can't exceed the max uint256 value.
+ 188 |     |         unchecked {
+ 189 | *   |             balanceOf[to] += amount;
+ 190 |     |         }
+ 191 |     | 
+ 192 | *   |         emit Transfer(address(0), to, amount);
+ 193 |     |     }
+ 194 |     | 
+ 195 | *   |     function _burn(address from, uint256 amount) internal virtual {
+ 196 | *   |         balanceOf[from] -= amount;
+ 197 |     | 
+ 198 |     |         // Cannot underflow because a user's balance
+ 199 |     |         // will never be larger than the total supply.
+ 200 |     |         unchecked {
+ 201 | *   |             totalSupply -= amount;
+ 202 |     |         }
+ 203 |     | 
+ 204 | *   |         emit Transfer(from, address(0), amount);
+ 205 |     |     }
+ 206 |     | }
+ 207 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/solmate/src/tokens/ERC4626.sol
+   1 |     | // SPDX-License-Identifier: AGPL-3.0-only
+   2 |     | pragma solidity >=0.8.0;
+   3 |     | 
+   4 |     | import {ERC20} from "../tokens/ERC20.sol";
+   5 |     | import {SafeTransferLib} from "../utils/SafeTransferLib.sol";
+   6 |     | import {FixedPointMathLib} from "../utils/FixedPointMathLib.sol";
+   7 |     | 
+   8 |     | /// @notice Minimal ERC4626 tokenized Vault implementation.
+   9 |     | /// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/tokens/ERC4626.sol)
+  10 |     | abstract contract ERC4626 is ERC20 {
+  11 |     |     using SafeTransferLib for ERC20;
+  12 |     |     using FixedPointMathLib for uint256;
+  13 |     | 
+  14 |     |     /*//////////////////////////////////////////////////////////////
+  15 |     |                                  EVENTS
+  16 |     |     //////////////////////////////////////////////////////////////*/
+  17 |     | 
+  18 |     |     event Deposit(address indexed caller, address indexed owner, uint256 assets, uint256 shares);
+  19 |     | 
+  20 |     |     event Withdraw(
+  21 |     |         address indexed caller,
+  22 |     |         address indexed receiver,
+  23 |     |         address indexed owner,
+  24 |     |         uint256 assets,
+  25 |     |         uint256 shares
+  26 |     |     );
+  27 |     | 
+  28 |     |     /*//////////////////////////////////////////////////////////////
+  29 |     |                                IMMUTABLES
+  30 |     |     //////////////////////////////////////////////////////////////*/
+  31 |     | 
+  32 | *   |     ERC20 public immutable asset;
+  33 |     | 
+  34 | *   |     constructor(
+  35 |     |         ERC20 _asset,
+  36 |     |         string memory _name,
+  37 |     |         string memory _symbol
+  38 | *   |     ) ERC20(_name, _symbol, _asset.decimals()) {
+  39 | *   |         asset = _asset;
+  40 |     |     }
+  41 |     | 
+  42 |     |     /*//////////////////////////////////////////////////////////////
+  43 |     |                         DEPOSIT/WITHDRAWAL LOGIC
+  44 |     |     //////////////////////////////////////////////////////////////*/
+  45 |     | 
+  46 | *   |     function deposit(uint256 assets, address receiver) public virtual returns (uint256 shares) {
+  47 |     |         // Check for rounding error since we round down in previewDeposit.
+  48 | *   |         require((shares = previewDeposit(assets)) != 0, "ZERO_SHARES");
+  49 |     | 
+  50 |     |         // Need to transfer before minting or ERC777s could reenter.
+  51 | *   |         asset.safeTransferFrom(msg.sender, address(this), assets);
+  52 |     | 
+  53 | *   |         _mint(receiver, shares);
+  54 |     | 
+  55 | *   |         emit Deposit(msg.sender, receiver, assets, shares);
+  56 |     | 
+  57 | *   |         afterDeposit(assets, shares);
+  58 |     |     }
+  59 |     | 
+  60 | *   |     function mint(uint256 shares, address receiver) public virtual returns (uint256 assets) {
+  61 | *   |         assets = previewMint(shares); // No need to check for rounding error, previewMint rounds up.
+  62 |     | 
+  63 |     |         // Need to transfer before minting or ERC777s could reenter.
+  64 | *   |         asset.safeTransferFrom(msg.sender, address(this), assets);
+  65 |     | 
+  66 | *   |         _mint(receiver, shares);
+  67 |     | 
+  68 | *   |         emit Deposit(msg.sender, receiver, assets, shares);
+  69 |     | 
+  70 | *   |         afterDeposit(assets, shares);
+  71 |     |     }
+  72 |     | 
+  73 | *   |     function withdraw(
+  74 |     |         uint256 assets,
+  75 |     |         address receiver,
+  76 |     |         address owner
+  77 | *   |     ) public virtual returns (uint256 shares) {
+  78 | *   |         shares = previewWithdraw(assets); // No need to check for rounding error, previewWithdraw rounds up.
+  79 |     | 
+  80 | *   |         if (msg.sender != owner) {
+  81 | *   |             uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
+  82 |     | 
+  83 | *   |             if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
+  84 |     |         }
+  85 |     | 
+  86 | *   |         beforeWithdraw(assets, shares);
+  87 |     | 
+  88 | *   |         _burn(owner, shares);
+  89 |     | 
+  90 | *   |         emit Withdraw(msg.sender, receiver, owner, assets, shares);
+  91 |     | 
+  92 | *   |         asset.safeTransfer(receiver, assets);
+  93 |     |     }
+  94 |     | 
+  95 | *   |     function redeem(
+  96 |     |         uint256 shares,
+  97 |     |         address receiver,
+  98 |     |         address owner
+  99 | *   |     ) public virtual returns (uint256 assets) {
+ 100 | *   |         if (msg.sender != owner) {
+ 101 | *   |             uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
+ 102 |     | 
+ 103 | *   |             if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
+ 104 |     |         }
+ 105 |     | 
+ 106 |     |         // Check for rounding error since we round down in previewRedeem.
+ 107 | *   |         require((assets = previewRedeem(shares)) != 0, "ZERO_ASSETS");
+ 108 |     | 
+ 109 | *   |         beforeWithdraw(assets, shares);
+ 110 |     | 
+ 111 | *   |         _burn(owner, shares);
+ 112 |     | 
+ 113 | *   |         emit Withdraw(msg.sender, receiver, owner, assets, shares);
+ 114 |     | 
+ 115 | *   |         asset.safeTransfer(receiver, assets);
+ 116 |     |     }
+ 117 |     | 
+ 118 |     |     /*//////////////////////////////////////////////////////////////
+ 119 |     |                             ACCOUNTING LOGIC
+ 120 |     |     //////////////////////////////////////////////////////////////*/
+ 121 |     | 
+ 122 |     |     function totalAssets() public view virtual returns (uint256);
+ 123 |     | 
+ 124 | *   |     function convertToShares(uint256 assets) public view virtual returns (uint256) {
+ 125 | *   |         uint256 supply = totalSupply; // Saves an extra SLOAD if totalSupply is non-zero.
+ 126 |     | 
+ 127 | *   |         return supply == 0 ? assets : assets.mulDivDown(supply, totalAssets());
+ 128 |     |     }
+ 129 |     | 
+ 130 | *   |     function convertToAssets(uint256 shares) public view virtual returns (uint256) {
+ 131 | *   |         uint256 supply = totalSupply; // Saves an extra SLOAD if totalSupply is non-zero.
+ 132 |     | 
+ 133 | *   |         return supply == 0 ? shares : shares.mulDivDown(totalAssets(), supply);
+ 134 |     |     }
+ 135 |     | 
+ 136 | *   |     function previewDeposit(uint256 assets) public view virtual returns (uint256) {
+ 137 | *   |         return convertToShares(assets);
+ 138 |     |     }
+ 139 |     | 
+ 140 | *   |     function previewMint(uint256 shares) public view virtual returns (uint256) {
+ 141 | *   |         uint256 supply = totalSupply; // Saves an extra SLOAD if totalSupply is non-zero.
+ 142 |     | 
+ 143 | *   |         return supply == 0 ? shares : shares.mulDivUp(totalAssets(), supply);
+ 144 |     |     }
+ 145 |     | 
+ 146 | *   |     function previewWithdraw(uint256 assets) public view virtual returns (uint256) {
+ 147 | *   |         uint256 supply = totalSupply; // Saves an extra SLOAD if totalSupply is non-zero.
+ 148 |     | 
+ 149 | *   |         return supply == 0 ? assets : assets.mulDivUp(supply, totalAssets());
+ 150 |     |     }
+ 151 |     | 
+ 152 | *   |     function previewRedeem(uint256 shares) public view virtual returns (uint256) {
+ 153 | *   |         return convertToAssets(shares);
+ 154 |     |     }
+ 155 |     | 
+ 156 |     |     /*//////////////////////////////////////////////////////////////
+ 157 |     |                      DEPOSIT/WITHDRAWAL LIMIT LOGIC
+ 158 |     |     //////////////////////////////////////////////////////////////*/
+ 159 |     | 
+ 160 | *   |     function maxDeposit(address) public view virtual returns (uint256) {
+ 161 | *   |         return type(uint256).max;
+ 162 |     |     }
+ 163 |     | 
+ 164 | *   |     function maxMint(address) public view virtual returns (uint256) {
+ 165 | *   |         return type(uint256).max;
+ 166 |     |     }
+ 167 |     | 
+ 168 | *   |     function maxWithdraw(address owner) public view virtual returns (uint256) {
+ 169 | *   |         return convertToAssets(balanceOf[owner]);
+ 170 |     |     }
+ 171 |     | 
+ 172 | *   |     function maxRedeem(address owner) public view virtual returns (uint256) {
+ 173 | *   |         return balanceOf[owner];
+ 174 |     |     }
+ 175 |     | 
+ 176 |     |     /*//////////////////////////////////////////////////////////////
+ 177 |     |                           INTERNAL HOOKS LOGIC
+ 178 |     |     //////////////////////////////////////////////////////////////*/
+ 179 |     | 
+ 180 |     |     function beforeWithdraw(uint256 assets, uint256 shares) internal virtual {}
+ 181 |     | 
+ 182 |     |     function afterDeposit(uint256 assets, uint256 shares) internal virtual {}
+ 183 |     | }
+ 184 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/solmate/src/utils/FixedPointMathLib.sol
+   1 |     | // SPDX-License-Identifier: AGPL-3.0-only
+   2 |     | pragma solidity >=0.8.0;
+   3 |     | 
+   4 |     | /// @notice Arithmetic library with operations for fixed-point numbers.
+   5 |     | /// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/utils/FixedPointMathLib.sol)
+   6 |     | /// @author Inspired by USM (https://github.com/usmfum/USM/blob/master/contracts/WadMath.sol)
+   7 |     | library FixedPointMathLib {
+   8 |     |     /*//////////////////////////////////////////////////////////////
+   9 |     |                     SIMPLIFIED FIXED POINT OPERATIONS
+  10 |     |     //////////////////////////////////////////////////////////////*/
+  11 |     | 
+  12 |     |     uint256 internal constant MAX_UINT256 = 2**256 - 1;
+  13 |     | 
+  14 |     |     uint256 internal constant WAD = 1e18; // The scalar of ETH and most ERC20s.
+  15 |     | 
+  16 |     |     function mulWadDown(uint256 x, uint256 y) internal pure returns (uint256) {
+  17 |     |         return mulDivDown(x, y, WAD); // Equivalent to (x * y) / WAD rounded down.
+  18 |     |     }
+  19 |     | 
+  20 |     |     function mulWadUp(uint256 x, uint256 y) internal pure returns (uint256) {
+  21 |     |         return mulDivUp(x, y, WAD); // Equivalent to (x * y) / WAD rounded up.
+  22 |     |     }
+  23 |     | 
+  24 |     |     function divWadDown(uint256 x, uint256 y) internal pure returns (uint256) {
+  25 |     |         return mulDivDown(x, WAD, y); // Equivalent to (x * WAD) / y rounded down.
+  26 |     |     }
+  27 |     | 
+  28 |     |     function divWadUp(uint256 x, uint256 y) internal pure returns (uint256) {
+  29 |     |         return mulDivUp(x, WAD, y); // Equivalent to (x * WAD) / y rounded up.
+  30 |     |     }
+  31 |     | 
+  32 |     |     /*//////////////////////////////////////////////////////////////
+  33 |     |                     LOW LEVEL FIXED POINT OPERATIONS
+  34 |     |     //////////////////////////////////////////////////////////////*/
+  35 |     | 
+  36 | *   |     function mulDivDown(
+  37 |     |         uint256 x,
+  38 |     |         uint256 y,
+  39 |     |         uint256 denominator
+  40 | *   |     ) internal pure returns (uint256 z) {
+  41 |     |         /// @solidity memory-safe-assembly
+  42 |     |         assembly {
+  43 |     |             // Equivalent to require(denominator != 0 && (y == 0 || x <= type(uint256).max / y))
+  44 | *   |             if iszero(mul(denominator, iszero(mul(y, gt(x, div(MAX_UINT256, y)))))) {
+  45 | *   |                 revert(0, 0)
+  46 |     |             }
+  47 |     | 
+  48 |     |             // Divide x * y by the denominator.
+  49 | *   |             z := div(mul(x, y), denominator)
+  50 |     |         }
+  51 |     |     }
+  52 |     | 
+  53 | *   |     function mulDivUp(
+  54 |     |         uint256 x,
+  55 |     |         uint256 y,
+  56 |     |         uint256 denominator
+  57 | *   |     ) internal pure returns (uint256 z) {
+  58 |     |         /// @solidity memory-safe-assembly
+  59 |     |         assembly {
+  60 |     |             // Equivalent to require(denominator != 0 && (y == 0 || x <= type(uint256).max / y))
+  61 | *   |             if iszero(mul(denominator, iszero(mul(y, gt(x, div(MAX_UINT256, y)))))) {
+  62 | *   |                 revert(0, 0)
+  63 |     |             }
+  64 |     | 
+  65 |     |             // If x * y modulo the denominator is strictly greater than 0,
+  66 |     |             // 1 is added to round up the division of x * y by the denominator.
+  67 | *   |             z := add(gt(mod(mul(x, y), denominator), 0), div(mul(x, y), denominator))
+  68 |     |         }
+  69 |     |     }
+  70 |     | 
+  71 |     |     function rpow(
+  72 |     |         uint256 x,
+  73 |     |         uint256 n,
+  74 |     |         uint256 scalar
+  75 |     |     ) internal pure returns (uint256 z) {
+  76 |     |         /// @solidity memory-safe-assembly
+  77 |     |         assembly {
+  78 |     |             switch x
+  79 |     |             case 0 {
+  80 |     |                 switch n
+  81 |     |                 case 0 {
+  82 |     |                     // 0 ** 0 = 1
+  83 |     |                     z := scalar
+  84 |     |                 }
+  85 |     |                 default {
+  86 |     |                     // 0 ** n = 0
+  87 |     |                     z := 0
+  88 |     |                 }
+  89 |     |             }
+  90 |     |             default {
+  91 |     |                 switch mod(n, 2)
+  92 |     |                 case 0 {
+  93 |     |                     // If n is even, store scalar in z for now.
+  94 |     |                     z := scalar
+  95 |     |                 }
+  96 |     |                 default {
+  97 |     |                     // If n is odd, store x in z for now.
+  98 |     |                     z := x
+  99 |     |                 }
+ 100 |     | 
+ 101 |     |                 // Shifting right by 1 is like dividing by 2.
+ 102 |     |                 let half := shr(1, scalar)
+ 103 |     | 
+ 104 |     |                 for {
+ 105 |     |                     // Shift n right by 1 before looping to halve it.
+ 106 |     |                     n := shr(1, n)
+ 107 |     |                 } n {
+ 108 |     |                     // Shift n right by 1 each iteration to halve it.
+ 109 |     |                     n := shr(1, n)
+ 110 |     |                 } {
+ 111 |     |                     // Revert immediately if x ** 2 would overflow.
+ 112 |     |                     // Equivalent to iszero(eq(div(xx, x), x)) here.
+ 113 |     |                     if shr(128, x) {
+ 114 |     |                         revert(0, 0)
+ 115 |     |                     }
+ 116 |     | 
+ 117 |     |                     // Store x squared.
+ 118 |     |                     let xx := mul(x, x)
+ 119 |     | 
+ 120 |     |                     // Round to the nearest number.
+ 121 |     |                     let xxRound := add(xx, half)
+ 122 |     | 
+ 123 |     |                     // Revert if xx + half overflowed.
+ 124 |     |                     if lt(xxRound, xx) {
+ 125 |     |                         revert(0, 0)
+ 126 |     |                     }
+ 127 |     | 
+ 128 |     |                     // Set x to scaled xxRound.
+ 129 |     |                     x := div(xxRound, scalar)
+ 130 |     | 
+ 131 |     |                     // If n is even:
+ 132 |     |                     if mod(n, 2) {
+ 133 |     |                         // Compute z * x.
+ 134 |     |                         let zx := mul(z, x)
+ 135 |     | 
+ 136 |     |                         // If z * x overflowed:
+ 137 |     |                         if iszero(eq(div(zx, x), z)) {
+ 138 |     |                             // Revert if x is non-zero.
+ 139 |     |                             if iszero(iszero(x)) {
+ 140 |     |                                 revert(0, 0)
+ 141 |     |                             }
+ 142 |     |                         }
+ 143 |     | 
+ 144 |     |                         // Round to the nearest number.
+ 145 |     |                         let zxRound := add(zx, half)
+ 146 |     | 
+ 147 |     |                         // Revert if zx + half overflowed.
+ 148 |     |                         if lt(zxRound, zx) {
+ 149 |     |                             revert(0, 0)
+ 150 |     |                         }
+ 151 |     | 
+ 152 |     |                         // Return properly scaled zxRound.
+ 153 |     |                         z := div(zxRound, scalar)
+ 154 |     |                     }
+ 155 |     |                 }
+ 156 |     |             }
+ 157 |     |         }
+ 158 |     |     }
+ 159 |     | 
+ 160 |     |     /*//////////////////////////////////////////////////////////////
+ 161 |     |                         GENERAL NUMBER UTILITIES
+ 162 |     |     //////////////////////////////////////////////////////////////*/
+ 163 |     | 
+ 164 |     |     function sqrt(uint256 x) internal pure returns (uint256 z) {
+ 165 |     |         /// @solidity memory-safe-assembly
+ 166 |     |         assembly {
+ 167 |     |             let y := x // We start y at x, which will help us make our initial estimate.
+ 168 |     | 
+ 169 |     |             z := 181 // The "correct" value is 1, but this saves a multiplication later.
+ 170 |     | 
+ 171 |     |             // This segment is to get a reasonable initial estimate for the Babylonian method. With a bad
+ 172 |     |             // start, the correct # of bits increases ~linearly each iteration instead of ~quadratically.
+ 173 |     | 
+ 174 |     |             // We check y >= 2^(k + 8) but shift right by k bits
+ 175 |     |             // each branch to ensure that if x >= 256, then y >= 256.
+ 176 |     |             if iszero(lt(y, 0x10000000000000000000000000000000000)) {
+ 177 |     |                 y := shr(128, y)
+ 178 |     |                 z := shl(64, z)
+ 179 |     |             }
+ 180 |     |             if iszero(lt(y, 0x1000000000000000000)) {
+ 181 |     |                 y := shr(64, y)
+ 182 |     |                 z := shl(32, z)
+ 183 |     |             }
+ 184 |     |             if iszero(lt(y, 0x10000000000)) {
+ 185 |     |                 y := shr(32, y)
+ 186 |     |                 z := shl(16, z)
+ 187 |     |             }
+ 188 |     |             if iszero(lt(y, 0x1000000)) {
+ 189 |     |                 y := shr(16, y)
+ 190 |     |                 z := shl(8, z)
+ 191 |     |             }
+ 192 |     | 
+ 193 |     |             // Goal was to get z*z*y within a small factor of x. More iterations could
+ 194 |     |             // get y in a tighter range. Currently, we will have y in [256, 256*2^16).
+ 195 |     |             // We ensured y >= 256 so that the relative difference between y and y+1 is small.
+ 196 |     |             // That's not possible if x < 256 but we can just verify those cases exhaustively.
+ 197 |     | 
+ 198 |     |             // Now, z*z*y <= x < z*z*(y+1), and y <= 2^(16+8), and either y >= 256, or x < 256.
+ 199 |     |             // Correctness can be checked exhaustively for x < 256, so we assume y >= 256.
+ 200 |     |             // Then z*sqrt(y) is within sqrt(257)/sqrt(256) of sqrt(x), or about 20bps.
+ 201 |     | 
+ 202 |     |             // For s in the range [1/256, 256], the estimate f(s) = (181/1024) * (s+1) is in the range
+ 203 |     |             // (1/2.84 * sqrt(s), 2.84 * sqrt(s)), with largest error when s = 1 and when s = 256 or 1/256.
+ 204 |     | 
+ 205 |     |             // Since y is in [256, 256*2^16), let a = y/65536, so that a is in [1/256, 256). Then we can estimate
+ 206 |     |             // sqrt(y) using sqrt(65536) * 181/1024 * (a + 1) = 181/4 * (y + 65536)/65536 = 181 * (y + 65536)/2^18.
+ 207 |     | 
+ 208 |     |             // There is no overflow risk here since y < 2^136 after the first branch above.
+ 209 |     |             z := shr(18, mul(z, add(y, 65536))) // A mul() is saved from starting z at 181.
+ 210 |     | 
+ 211 |     |             // Given the worst case multiplicative error of 2.84 above, 7 iterations should be enough.
+ 212 |     |             z := shr(1, add(z, div(x, z)))
+ 213 |     |             z := shr(1, add(z, div(x, z)))
+ 214 |     |             z := shr(1, add(z, div(x, z)))
+ 215 |     |             z := shr(1, add(z, div(x, z)))
+ 216 |     |             z := shr(1, add(z, div(x, z)))
+ 217 |     |             z := shr(1, add(z, div(x, z)))
+ 218 |     |             z := shr(1, add(z, div(x, z)))
+ 219 |     | 
+ 220 |     |             // If x+1 is a perfect square, the Babylonian method cycles between
+ 221 |     |             // floor(sqrt(x)) and ceil(sqrt(x)). This statement ensures we return floor.
+ 222 |     |             // See: https://en.wikipedia.org/wiki/Integer_square_root#Using_only_integer_division
+ 223 |     |             // Since the ceil is rare, we save gas on the assignment and repeat division in the rare case.
+ 224 |     |             // If you don't care whether the floor or ceil square root is returned, you can remove this statement.
+ 225 |     |             z := sub(z, lt(div(x, z), z))
+ 226 |     |         }
+ 227 |     |     }
+ 228 |     | 
+ 229 |     |     function unsafeMod(uint256 x, uint256 y) internal pure returns (uint256 z) {
+ 230 |     |         /// @solidity memory-safe-assembly
+ 231 |     |         assembly {
+ 232 |     |             // Mod x by y. Note this will return
+ 233 |     |             // 0 instead of reverting if y is zero.
+ 234 |     |             z := mod(x, y)
+ 235 |     |         }
+ 236 |     |     }
+ 237 |     | 
+ 238 |     |     function unsafeDiv(uint256 x, uint256 y) internal pure returns (uint256 r) {
+ 239 |     |         /// @solidity memory-safe-assembly
+ 240 |     |         assembly {
+ 241 |     |             // Divide x by y. Note this will return
+ 242 |     |             // 0 instead of reverting if y is zero.
+ 243 |     |             r := div(x, y)
+ 244 |     |         }
+ 245 |     |     }
+ 246 |     | 
+ 247 |     |     function unsafeDivUp(uint256 x, uint256 y) internal pure returns (uint256 z) {
+ 248 |     |         /// @solidity memory-safe-assembly
+ 249 |     |         assembly {
+ 250 |     |             // Add 1 to x * y if x % y > 0. Note this will
+ 251 |     |             // return 0 instead of reverting if y is zero.
+ 252 |     |             z := add(gt(mod(x, y), 0), div(x, y))
+ 253 |     |         }
+ 254 |     |     }
+ 255 |     | }
+ 256 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/lib/solmate/src/utils/SafeTransferLib.sol
+   1 |     | // SPDX-License-Identifier: AGPL-3.0-only
+   2 |     | pragma solidity >=0.8.0;
+   3 |     | 
+   4 |     | import {ERC20} from "../tokens/ERC20.sol";
+   5 |     | 
+   6 |     | /// @notice Safe ETH and ERC20 transfer library that gracefully handles missing return values.
+   7 |     | /// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/utils/SafeTransferLib.sol)
+   8 |     | /// @dev Use with caution! Some functions in this library knowingly create dirty bits at the destination of the free memory pointer.
+   9 |     | library SafeTransferLib {
+  10 |     |     /*//////////////////////////////////////////////////////////////
+  11 |     |                              ETH OPERATIONS
+  12 |     |     //////////////////////////////////////////////////////////////*/
+  13 |     | 
+  14 |     |     function safeTransferETH(address to, uint256 amount) internal {
+  15 |     |         bool success;
+  16 |     | 
+  17 |     |         /// @solidity memory-safe-assembly
+  18 |     |         assembly {
+  19 |     |             // Transfer the ETH and store if it succeeded or not.
+  20 |     |             success := call(gas(), to, amount, 0, 0, 0, 0)
+  21 |     |         }
+  22 |     | 
+  23 |     |         require(success, "ETH_TRANSFER_FAILED");
+  24 |     |     }
+  25 |     | 
+  26 |     |     /*//////////////////////////////////////////////////////////////
+  27 |     |                             ERC20 OPERATIONS
+  28 |     |     //////////////////////////////////////////////////////////////*/
+  29 |     | 
+  30 | *   |     function safeTransferFrom(
+  31 |     |         ERC20 token,
+  32 |     |         address from,
+  33 |     |         address to,
+  34 |     |         uint256 amount
+  35 | *   |     ) internal {
+  36 | *   |         bool success;
+  37 |     | 
+  38 |     |         /// @solidity memory-safe-assembly
+  39 | *   |         assembly {
+  40 |     |             // Get a pointer to some free memory.
+  41 | *   |             let freeMemoryPointer := mload(0x40)
+  42 |     | 
+  43 |     |             // Write the abi-encoded calldata into memory, beginning with the function selector.
+  44 | *   |             mstore(freeMemoryPointer, 0x23b872dd00000000000000000000000000000000000000000000000000000000)
+  45 | *   |             mstore(add(freeMemoryPointer, 4), and(from, 0xffffffffffffffffffffffffffffffffffffffff)) // Append and mask the "from" argument.
+  46 | *   |             mstore(add(freeMemoryPointer, 36), and(to, 0xffffffffffffffffffffffffffffffffffffffff)) // Append and mask the "to" argument.
+  47 | *   |             mstore(add(freeMemoryPointer, 68), amount) // Append the "amount" argument. Masking not required as it's a full 32 byte type.
+  48 |     | 
+  49 |     |             // We use 100 because the length of our calldata totals up like so: 4 + 32 * 3.
+  50 |     |             // We use 0 and 32 to copy up to 32 bytes of return data into the scratch space.
+  51 | *   |             success := call(gas(), token, 0, freeMemoryPointer, 100, 0, 32)
+  52 |     | 
+  53 |     |             // Set success to whether the call reverted, if not we check it either
+  54 |     |             // returned exactly 1 (can't just be non-zero data), or had no return data and token has code.
+  55 | *   |             if and(iszero(and(eq(mload(0), 1), gt(returndatasize(), 31))), success) {
+  56 |     |                 success := iszero(or(iszero(extcodesize(token)), returndatasize())) 
+  57 |     |             }
+  58 |     |         }
+  59 |     | 
+  60 | *   |         require(success, "TRANSFER_FROM_FAILED");
+  61 |     |     }
+  62 |     | 
+  63 | *   |     function safeTransfer(
+  64 |     |         ERC20 token,
+  65 |     |         address to,
+  66 |     |         uint256 amount
+  67 | *   |     ) internal {
+  68 | *   |         bool success;
+  69 |     | 
+  70 |     |         /// @solidity memory-safe-assembly
+  71 | *   |         assembly {
+  72 |     |             // Get a pointer to some free memory.
+  73 | *   |             let freeMemoryPointer := mload(0x40)
+  74 |     | 
+  75 |     |             // Write the abi-encoded calldata into memory, beginning with the function selector.
+  76 | *   |             mstore(freeMemoryPointer, 0xa9059cbb00000000000000000000000000000000000000000000000000000000)
+  77 | *   |             mstore(add(freeMemoryPointer, 4), and(to, 0xffffffffffffffffffffffffffffffffffffffff)) // Append and mask the "to" argument.
+  78 | *   |             mstore(add(freeMemoryPointer, 36), amount) // Append the "amount" argument. Masking not required as it's a full 32 byte type.
+  79 |     | 
+  80 |     |             // We use 68 because the length of our calldata totals up like so: 4 + 32 * 2.
+  81 |     |             // We use 0 and 32 to copy up to 32 bytes of return data into the scratch space.
+  82 | *   |             success := call(gas(), token, 0, freeMemoryPointer, 68, 0, 32)
+  83 |     | 
+  84 |     |             // Set success to whether the call reverted, if not we check it either
+  85 |     |             // returned exactly 1 (can't just be non-zero data), or had no return data and token has code.
+  86 | *   |             if and(iszero(and(eq(mload(0), 1), gt(returndatasize(), 31))), success) {
+  87 |     |                 success := iszero(or(iszero(extcodesize(token)), returndatasize())) 
+  88 |     |             }
+  89 |     |         }
+  90 |     | 
+  91 | *   |         require(success, "TRANSFER_FAILED");
+  92 |     |     }
+  93 |     | 
+  94 |     |     function safeApprove(
+  95 |     |         ERC20 token,
+  96 |     |         address to,
+  97 |     |         uint256 amount
+  98 |     |     ) internal {
+  99 |     |         bool success;
+ 100 |     | 
+ 101 |     |         /// @solidity memory-safe-assembly
+ 102 |     |         assembly {
+ 103 |     |             // Get a pointer to some free memory.
+ 104 |     |             let freeMemoryPointer := mload(0x40)
+ 105 |     | 
+ 106 |     |             // Write the abi-encoded calldata into memory, beginning with the function selector.
+ 107 |     |             mstore(freeMemoryPointer, 0x095ea7b300000000000000000000000000000000000000000000000000000000)
+ 108 |     |             mstore(add(freeMemoryPointer, 4), and(to, 0xffffffffffffffffffffffffffffffffffffffff)) // Append and mask the "to" argument.
+ 109 |     |             mstore(add(freeMemoryPointer, 36), amount) // Append the "amount" argument. Masking not required as it's a full 32 byte type.
+ 110 |     | 
+ 111 |     |             // We use 68 because the length of our calldata totals up like so: 4 + 32 * 2.
+ 112 |     |             // We use 0 and 32 to copy up to 32 bytes of return data into the scratch space.
+ 113 |     |             success := call(gas(), token, 0, freeMemoryPointer, 68, 0, 32)
+ 114 |     | 
+ 115 |     |             // Set success to whether the call reverted, if not we check it either
+ 116 |     |             // returned exactly 1 (can't just be non-zero data), or had no return data and token has code.
+ 117 |     |             if and(iszero(and(eq(mload(0), 1), gt(returndatasize(), 31))), success) {
+ 118 |     |                 success := iszero(or(iszero(extcodesize(token)), returndatasize())) 
+ 119 |     |             }
+ 120 |     |         }
+ 121 |     | 
+ 122 |     |         require(success, "APPROVE_FAILED");
+ 123 |     |     }
+ 124 |     | }
+ 125 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/src/Vault.sol
+  1 |     | // SPDX-License-Identifier: MIT
+  2 |     | pragma solidity ^0.8.30;
+  3 |     | 
+  4 |     | import {ERC20} from "solmate/tokens/ERC20.sol";
+  5 |     | import {ERC4626} from "solmate/tokens/ERC4626.sol";
+  6 |     | 
+  7 |     | // 2. A simple Vault that inherits Solmate's ERC4626
+  8 |     | contract VaultImpl is ERC4626 {
+  9 | *   |     constructor(ERC20 _asset, string memory _name, string memory _symbol) ERC4626(_asset, _name, _symbol) {}
+ 10 |     | 
+ 11 |     | 	uint256 _totalAssets;
+ 12 |     | 
+ 13 | *   |     function totalAssets() public view override returns (uint256) {
+ 14 | *   |         return _totalAssets;
+ 15 |     |     }
+ 16 |     | 
+ 17 | *   |     function beforeWithdraw(uint256 assets, uint256) internal override {
+ 18 | *   |         _totalAssets = _totalAssets - assets;
+ 19 |     |     }
+ 20 |     | 
+ 21 | *   |     function afterDeposit(uint256 assets, uint256) internal override {
+ 22 | *   |         _totalAssets = _totalAssets + assets;
+ 23 |     |     }
+ 24 |     | }
+ 25 |     | 
+
+/Users/teoslaf1/docs/rareSkills/firstWeek/echidna/test/CryticERC4626Harness.sol
+  1 |     | // SPDX-License-Identifier: MIT
+  2 |     | pragma solidity ^0.8.24;
+  3 |     | 
+  4 |     | import {CryticERC4626PropertyTests} from "properties/ERC4626/ERC4626PropertyTests.sol";
+  5 |     | // this token _must_ be the vault's underlying asset
+  6 |     | import {TestERC20Token} from "properties/ERC4626/util/TestERC20Token.sol";
+  7 |     | import {ERC20} from "solmate/tokens/ERC20.sol";
+  8 |     | import {ERC4626} from "solmate/tokens/ERC4626.sol";
+  9 |     | 
+ 10 |     | // change to your vault implementation
+ 11 |     | import {VaultImpl} from "../src/Vault.sol";
+ 12 |     | 
+ 13 |     | 
+ 14 | *   | contract VaultImplInternalTestable is VaultImpl {
+ 15 | *   | 	    constructor(ERC20 _asset, string memory _name, string memory _symbol)
+ 16 | *   | 		VaultImpl(_asset, _name, _symbol) {}
+ 17 |     | 
+ 18 | *   | 		function recognizeProfit(uint256 profit) public {
+ 19 | *   | 			TestERC20Token(address(asset)).mint(address(this), profit);
+ 20 | *   | 			_totalAssets += profit;
+ 21 |     | 		}
+ 22 | *   | 		function recognizeLoss(uint256 loss) public {
+ 23 | *   | 			TestERC20Token(address(asset)).burn(address(this), loss);
+ 24 | *   | 			_totalAssets -= loss;
+ 25 |     | 		}
+ 26 |     | }
+ 27 | *r  | contract CryticERC4626Harness is CryticERC4626PropertyTests {
+ 28 | *   |     constructor() {
+ 29 | *   |         TestERC20Token _asset = new TestERC20Token("Test Token", "TT", 18);
+ 30 | *   |         VaultImplInternalTestable _vault = new VaultImplInternalTestable(ERC20(address(_asset)), "Vault Token", "VTT");
+ 31 | *   |         initialize(address(_vault), address(_asset), true);
+ 32 |     |     }
+ 33 |     | }
+ 34 |     | 
+ 35 |     | //echidna test/CryticERC4626Harness.sol --contract CryticERC4626Harness --config ./echidna.config.yaml
+ 36 |     | 
+
