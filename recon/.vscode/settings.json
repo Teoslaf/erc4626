@@ -1,0 +1,4 @@
+{
+	"recon.defaultFuzzer": "Echidna",
+	"recon.echidna.mode": "assertion"
+}

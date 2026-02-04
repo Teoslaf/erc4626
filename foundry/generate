@@ -1,0 +1,3 @@
+forge coverage --include-libs --report lcov
+genhtml lcov.info -o coverage --ignore-errors inconsistent,corrupt
+open coverage/index.html
